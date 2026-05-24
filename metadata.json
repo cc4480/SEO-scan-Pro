@@ -1,0 +1,6 @@
+{
+  "name": "SEO Scan Pro",
+  "description": "Instant enterprise-grade SEO audits. Powered by Gemini (DeepSeek-quality intelligence). Delivered as beautiful, white-label PDFs — with embeddable widgets and full-site intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
