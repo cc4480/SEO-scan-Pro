@@ -85,6 +85,7 @@ export interface WhiteLabelSettings {
   enabledSections: string[]; // e.g., ["executive", "technical", "content", "aeo-geo", "checklist"]
   language: 'en' | 'es';
   webhookUrl?: string;
+  webhookSecret?: string;
   monitoringEmail?: string;
   enableEmailAlerts?: boolean;
 }

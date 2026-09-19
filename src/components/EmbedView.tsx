@@ -196,7 +196,7 @@ export default function EmbedView() {
 
                 <div className="space-y-2 pt-1">
                   <a
-                    href={`/api/report/${testResult.scanId}/download`}
+                    href={`/api/report/${testResult.scanId}/download?format=pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-indigo-500/10"

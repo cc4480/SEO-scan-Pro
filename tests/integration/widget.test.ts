@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../server';
 import { prisma } from '../../lib/db';
+import { waitForScanStatus } from '../helpers';
 
 const app = createApp();
 const testEmail = (label: string) => `test-widget-${label}-${Date.now()}@example.com`;
@@ -77,14 +78,13 @@ describe('GET /api/report/:id/download — public vs owner-only access', () => {
       .send({ url: 'example.com', email: 'lead@prospect.com', widgetKey: me.body.widgetKey });
     const scanId = widgetRes.body.scanId;
 
-    // Wait for the async scan pipeline to complete
-    await new Promise(resolve => setTimeout(resolve, 4000));
+    await waitForScanStatus(app, scanId, reg.body.token);
 
     const downloadRes = await request(app).get(`/api/report/${scanId}/download`);
     expect(downloadRes.status).toBe(200);
 
     await prisma.user.deleteMany({ where: { email } });
-  }, 15000);
+  }, 25000);
 
   it("an owner-run scan (no leadEmail) is NOT downloadable without auth", async () => {
     const email = testEmail('download-owner');
@@ -96,7 +96,7 @@ describe('GET /api/report/:id/download — public vs owner-only access', () => {
       .send({ url: 'example.com', mode: 'SINGLE', depth: 1 });
     const scanId = scanRes.body.id;
 
-    await new Promise(resolve => setTimeout(resolve, 4000));
+    await waitForScanStatus(app, scanId, reg.body.token);
 
     const unauthedDownload = await request(app).get(`/api/report/${scanId}/download`);
     expect(unauthedDownload.status).toBe(401);
@@ -107,5 +107,5 @@ describe('GET /api/report/:id/download — public vs owner-only access', () => {
     expect(authedDownload.status).toBe(200);
 
     await prisma.user.deleteMany({ where: { email } });
-  }, 15000);
+  }, 25000);
 });

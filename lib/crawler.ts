@@ -1,4 +1,38 @@
 import { CrawlPageData, CrawlResult, ScanMode } from '../src/types';
+import { getBrowser } from './browser';
+
+const CRAWLER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1';
+
+interface RenderedPage {
+  html: string;
+  status: number;
+  ok: boolean;
+  loadTimeMs: number;
+}
+
+// Renders the page in a real (headless) browser rather than a plain fetch, so JavaScript-
+// rendered content (SPAs, client-side frameworks) shows up in the crawled HTML instead of
+// an empty shell. parsePage() below works on any HTML string, rendered or not, so nothing
+// downstream needs to change.
+async function renderPage(url: string, timeoutMs: number): Promise<RenderedPage> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  const startTime = Date.now();
+  try {
+    await page.setUserAgent(CRAWLER_USER_AGENT);
+    const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    const loadTimeMs = Date.now() - startTime;
+    const html = await page.content();
+    return {
+      html,
+      status: response?.status() ?? 200,
+      ok: response ? response.ok() : true,
+      loadTimeMs
+    };
+  } finally {
+    await page.close();
+  }
+}
 
 /**
  * Super lightweight, extremely fast regex-based HTML scanner
@@ -231,25 +265,19 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
     // sitemap not found
   }
 
-  // Step 2: Fetch and Analyze Root Page
-  const startTime = Date.now();
+  // Step 2: Render and Analyze Root Page (real browser — captures JS-rendered content)
   try {
-    const targetResponse = await fetch(originUrl.toString(), {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1' },
-      signal: AbortSignal.timeout(10000)
-    });
-    const loadTime = Date.now() - startTime;
+    const rendered = await renderPage(originUrl.toString(), 15000);
 
-    if (!targetResponse.ok) {
+    if (!rendered.ok) {
       // Target responded with a non-OK status (e.g. 403/404/500). We still don't have real page
       // content to parse, so fall back to simulated data — flagged via isSimulated.
-      result.mainPage = createMockPage(originUrl.toString(), targetResponse.status, loadTime);
+      result.mainPage = createMockPage(originUrl.toString(), rendered.status, rendered.loadTimeMs);
     } else {
-      const htmlText = await targetResponse.text();
-      result.mainPage = parsePage(originUrl.toString(), htmlText, loadTime);
+      result.mainPage = parsePage(originUrl.toString(), rendered.html, rendered.loadTimeMs);
     }
   } catch (err: any) {
-    console.warn(`Fetch failed for ${originUrl.toString()}: ${err?.message}. Falling back to simulated placeholder data — this scan will NOT reflect the real site.`);
+    console.warn(`Render failed for ${originUrl.toString()}: ${err?.message}. Falling back to simulated placeholder data — this scan will NOT reflect the real site.`);
 
     // Fallback only: the target could not actually be reached (offline, DNS, CORS/firewall, timeout).
     // This data is fabricated so the UI has something to render, but callers MUST check
@@ -268,18 +296,12 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
     const uniqueCandidates = Array.from(new Set(candidates)).slice(0, Math.min(depth + 1, 4));
 
     for (const linkUrl of uniqueCandidates) {
-      const pageStartTime = Date.now();
       try {
-        const subRes = await fetch(linkUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1' },
-          signal: AbortSignal.timeout(4000)
-        });
-        const delay = Date.now() - pageStartTime;
-        if (subRes.ok) {
-          const text = await subRes.text();
-          result.additionalPages.push(parsePage(linkUrl, text, delay));
+        const rendered = await renderPage(linkUrl, 10000);
+        if (rendered.ok) {
+          result.additionalPages.push(parsePage(linkUrl, rendered.html, rendered.loadTimeMs));
         } else {
-          result.additionalPages.push(createMockPage(linkUrl, subRes.status, delay));
+          result.additionalPages.push(createMockPage(linkUrl, rendered.status, rendered.loadTimeMs));
         }
       } catch {
         result.additionalPages.push(createMockPage(linkUrl, 200, Math.floor(Math.random() * 200 + 100)));

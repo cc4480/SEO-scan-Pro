@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WhiteLabelSettings } from '../types';
-import { Image, Palette, Eye, CheckCircle2, Languages, HelpCircle } from 'lucide-react';
+import { Image, Palette, Eye, CheckCircle2, Languages, HelpCircle, Copy, Check, ShieldCheck } from 'lucide-react';
 
 interface WhiteLabelEditorProps {
   settings: WhiteLabelSettings;
@@ -33,6 +33,14 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
   const [webhookUrl, setWebhookUrl] = useState(settings.webhookUrl || '');
   const [monitoringEmail, setMonitoringEmail] = useState(settings.monitoringEmail || '');
   const [enableEmailAlerts, setEnableEmailAlerts] = useState(!!settings.enableEmailAlerts);
+  const [secretCopied, setSecretCopied] = useState(false);
+
+  const copyWebhookSecret = () => {
+    if (!settings.webhookSecret) return;
+    navigator.clipboard.writeText(settings.webhookSecret);
+    setSecretCopied(true);
+    setTimeout(() => setSecretCopied(false), 2000);
+  };
 
   const handleToggleSection = (sectionId: string) => {
     if (enabledSections.includes(sectionId)) {
@@ -262,6 +270,28 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-mono focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
               />
               <span className="text-[9px] text-slate-500 mt-1 block">Sends Name, Email, Website & Scan score instantly.</span>
+
+              {settings.webhookSecret && (
+                <div className="mt-3 bg-white/5 border border-white/10 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                      <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                      Webhook Signing Secret
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copyWebhookSecret}
+                      className="text-[9px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition"
+                    >
+                      {secretCopied ? <><Check className="h-3 w-3 text-emerald-400" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
+                    </button>
+                  </div>
+                  <code className="text-[9px] text-slate-300 font-mono break-all block">{settings.webhookSecret}</code>
+                  <p className="text-[9px] text-slate-500 mt-1.5">
+                    Every request includes an <code className="text-slate-400">X-SEOScan-Signature</code> header (HMAC-SHA256 of the raw body, using this secret). Verify it to confirm requests genuinely came from us.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

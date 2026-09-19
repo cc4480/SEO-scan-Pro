@@ -29,12 +29,16 @@
 
 #### Protected Endpoints (Auth Required)
 - `GET /api/auth/me` - Get current user info (incl. `widgetKey`)
+- `PATCH /api/auth/change-password` - Change password (requires current password)
+- `PATCH /api/auth/change-email` - Change email (requires current password)
+- `DELETE /api/auth/account` - Permanently delete account, cascading scans & settings (requires current password)
 - `GET /api/scans` - List user's scans (paginated: `?page=&limit=`)
 - `GET /api/scans/:id` - Get single scan
+- `DELETE /api/scans/:id` - Delete a scan
 - `POST /api/scan` - Create new scan (async)
-- `GET /api/settings` - Get white-label settings
+- `GET /api/settings` - Get white-label settings (incl. `webhookSecret`)
 - `POST /api/settings` - Update settings
-- `GET /api/report/:id/download` - Download HTML report (public for widget-originated lead scans, owner-only otherwise)
+- `GET /api/report/:id/download` - Download HTML report (public for widget-originated lead scans, owner-only otherwise); add `?format=pdf` for a real server-rendered PDF
 
 ### 4. **Frontend Auth UI**
 - **LoginForm.tsx** - Login page with email/password + "Forgot password?" link

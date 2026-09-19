@@ -9,7 +9,8 @@ An enterprise-grade, white-label SEO audit platform. Crawls a target site, runs 
 - **Database:** PostgreSQL via Prisma ORM
 - **Auth:** JWT (bearer tokens) + bcrypt password hashing
 - **AI:** Google Gemini (`@google/genai`), with a deterministic fallback report generator when no API key is configured
-- **Security:** helmet, CORS allowlist, rate limiting (`express-rate-limit`), zod request validation
+- **Rendering:** Puppeteer (headless Chromium) — used both for crawling (captures JS-rendered content, not just static HTML) and for generating real PDF report exports
+- **Security:** helmet, CORS allowlist, rate limiting (`express-rate-limit`), zod request validation, HMAC-signed outbound webhooks
 
 ## Prerequisites
 
@@ -82,11 +83,13 @@ npm test
 
 ## Features
 
-- **Site audits** — single-page or multi-page crawl (`lib/crawler.ts`), analyzing meta tags, headings, images/alt text, internal/external links, structured data (JSON-LD), and sitemap presence.
+- **Site audits** — single-page or multi-page crawl (`lib/crawler.ts`), rendered in a real headless browser (Puppeteer) so JavaScript-rendered/SPA content shows up, not just static HTML. Analyzes meta tags, headings, images/alt text, internal/external links, structured data (JSON-LD), and sitemap presence.
 - **AI-generated reports** — technical, content, AEO/GEO, and performance scoring with prioritized fixes, via Gemini (`lib/deepseek.ts`). If a target site can't be reached, the report is clearly flagged as simulated (`isSimulated`/`hasSimulatedData`) rather than presented as a real result.
 - **White-label branding** — custom agency name, logo, colors, and footer, reflected in both the live dashboard and the downloadable report.
+- **Report export** — a real server-rendered PDF (`?format=pdf`, via Puppeteer) or the standalone HTML version.
 - **Historical comparison** — chronological score deltas across repeat scans of the same domain.
-- **Embeddable lead-capture widget** — an iframe (`/embed?key=<widgetKey>`) agencies can drop on their own site; leads are attributed to the correct account via a per-user `widgetKey`, and are rate-limited.
+- **Embeddable lead-capture widget** — an iframe (`/embed?key=<widgetKey>`) agencies can drop on their own site; leads are attributed to the correct account via a per-user `widgetKey`, and are rate-limited. Completed leads fire an HMAC-SHA256 signed webhook (`X-SEOScan-Signature` header) to the agency's configured URL, verifiable with the secret shown in White-Label Presets.
+- **Account management** — change password, change email, delete account (all require re-confirming the current password), in addition to the email-based password reset flow.
 - **Competitor benchmark** — comparison matrix against other SEO tools.
 
 ## Authentication
@@ -104,19 +107,24 @@ Register and login return a token; the frontend stores it in `localStorage` and 
 ```
 server.ts              Express app: routes, auth, rate limiting, report HTML generation
 lib/
-  crawler.ts            Regex-based HTML crawler
+  crawler.ts            Puppeteer-rendered crawler + regex-based HTML parsing
   deepseek.ts            Gemini-backed SEO report generator (+ offline fallback)
   db.ts                  Prisma client singleton
-  auth.ts                JWT + bcrypt helpers
+  auth.ts                JWT + bcrypt helpers + password reset token generation
   authMiddleware.ts        Express auth middleware
   validation.ts             zod request schemas
   env.ts                     Startup environment validation
+  email.ts                    Password reset email (stubbed — logs, no provider wired up)
+  webhook.ts                   HMAC-signed outbound webhook delivery
+  browser.ts                    Shared lazily-launched Puppeteer browser instance
+  pdf.ts                          HTML-to-PDF rendering (reuses lib/browser.ts)
 prisma/
-  schema.prisma            Users, scans, white-label settings
+  schema.prisma            Users, scans, white-label settings, password reset tokens
 src/
   App.tsx                    Top-level app shell + auth flow
   components/
-    Auth/                       Login/register forms
+    Auth/                       Login/register/forgot-password/reset-password forms
+    AccountSettings.tsx           Change password/email, delete account
     ScanForm.tsx, ReportDashboard.tsx, ReportComparison.tsx,
     WhiteLabelEditor.tsx, WidgetEmbedBuilder.tsx, EmbedView.tsx,
     CompetitorBenchmark.tsx
@@ -124,6 +132,7 @@ src/
 
 ## Known Limitations
 
-- The crawler parses raw HTML via regex — it does not execute JavaScript, so client-rendered (SPA) sites will audit as mostly empty.
-- "Export White-Label Report" downloads a standalone HTML file styled for browser print-to-PDF, not a server-generated PDF.
 - Password reset works end to end, but no real email provider is connected yet — the reset link is logged to the server console (and returned directly in non-production API responses). See `lib/email.ts` and `AUTH_IMPLEMENTATION.md`.
+- The competitor benchmark tab is illustrative marketing copy, not live third-party data — wiring in a real provider (e.g. SimilarWeb) requires that provider's own paid API key as an app secret, which isn't configured.
+- JWTs have no server-side revocation — there's no "log out everywhere" or immediate-invalidation-on-password-change beyond the token's natural expiry (`JWT_EXPIRY`, default 7d).
+- Puppeteer (headless Chromium) is a heavy dependency — expect a slower cold start and larger deploy footprint than the previous plain-`fetch()` crawler, and budget for it in your hosting plan's memory/CPU limits.

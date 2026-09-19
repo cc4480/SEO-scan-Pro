@@ -28,6 +28,20 @@ export const resetPasswordSchema = z.object({
   password: passwordRule
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: passwordRule
+});
+
+export const changeEmailSchema = z.object({
+  newEmail: z.string().trim().email('Invalid email address').max(255),
+  currentPassword: z.string().min(1, 'Current password is required')
+});
+
+export const deleteAccountSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required')
+});
+
 export const scanCreateSchema = z.object({
   url: z.string().trim().min(1, 'URL is required').max(2048),
   mode: z.enum(['SINGLE', 'FULL_SITE']).optional(),

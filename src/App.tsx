@@ -11,9 +11,10 @@ import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
 import ForgotPasswordForm from './components/Auth/ForgotPasswordForm';
 import ResetPasswordForm from './components/Auth/ResetPasswordForm';
+import AccountSettings from './components/AccountSettings';
 import {
   Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
-  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut
+  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog
 } from 'lucide-react';
 
 export default function App() {
@@ -124,7 +125,7 @@ export default function App() {
     language: 'en'
   });
 
-  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'settings' | 'widget' | 'benchmark'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'settings' | 'widget' | 'benchmark' | 'account'>('audit');
   const [activeScan, setActiveScan] = useState<Scan | null>(null);
   const [selectedCompareScan, setSelectedCompareScan] = useState<Scan | undefined>(undefined);
   const [isCrawlLoading, setIsCrawlLoading] = useState(false);
@@ -244,6 +245,25 @@ export default function App() {
     }
   };
 
+  // Delete a scan from history
+  const deleteScan = async (scanId: string) => {
+    if (!confirm('Delete this scan? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/scans/${scanId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        alert('Failed to delete scan.');
+        return;
+      }
+      if (activeScan?.id === scanId) setActiveScan(null);
+      await loadDatabase();
+    } catch {
+      alert('Network failure deleting scan.');
+    }
+  };
+
   // Logout function
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -308,7 +328,8 @@ export default function App() {
             { id: 'compare', label: 'Chronological delta', icon: History, badge: scans.length > 1 ? scans.length : undefined },
             { id: 'settings', label: 'White-Label Presets', icon: Palette },
             { id: 'widget', label: 'Client Lead Widget', icon: Code },
-            { id: 'benchmark', label: 'Competitor Benchmark', icon: Award }
+            { id: 'benchmark', label: 'Competitor Benchmark', icon: Award },
+            { id: 'account', label: 'Account', icon: UserCog }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -375,29 +396,42 @@ export default function App() {
                       {scans.map(s => {
                         const isCurrent = activeScan?.id === s.id;
                         return (
-                          <button
+                          <div
                             key={s.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setActiveScan(s)}
-                            className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                            onKeyDown={(e) => { if (e.key === 'Enter') setActiveScan(s); }}
+                            className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer group ${
                               isCurrent
                                 ? 'border-blue-500 bg-blue-500/10 text-white'
                                 : 'border-white/10 hover:border-white/20 bg-white/5 text-slate-300'
                             }`}
                           >
-                            <div className="truncate w-3/4">
+                            <div className="truncate w-2/3">
                               <div className="text-xs font-bold truncate break-all">{s.url}</div>
                               <span className="text-[9px] text-slate-400 font-mono block mt-0.5">
                                 {new Date(s.createdAt).toLocaleDateString()} • {s.mode === 'FULL_SITE' ? 'Full Crawl' : 'Single'}
                               </span>
                             </div>
 
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              s.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
-                              s.status === 'PENDING' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                            }`}>
-                              {s.status === 'COMPLETED' ? `${s.seoReport?.score?.overall || 0} Pts` : s.status}
-                            </span>
-                          </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                s.status === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                                s.status === 'PENDING' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse' : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                              }`}>
+                                {s.status === 'COMPLETED' ? `${s.seoReport?.score?.overall || 0} Pts` : s.status}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); deleteScan(s.id); }}
+                                className="p-1 rounded-md text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                title="Delete scan"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -473,6 +507,17 @@ export default function App() {
           {activeTab === 'benchmark' && (
             <div className="max-w-4xl mx-auto">
               <CompetitorBenchmark />
+            </div>
+          )}
+
+          {/* TAB 6: ACCOUNT SETTINGS */}
+          {activeTab === 'account' && currentUser && (
+            <div className="max-w-2xl mx-auto">
+              <AccountSettings
+                currentEmail={currentUser.email}
+                onEmailChanged={(newEmail) => setCurrentUser({ ...currentUser, email: newEmail })}
+                onAccountDeleted={handleLogout}
+              />
             </div>
           )}
 

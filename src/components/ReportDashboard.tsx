@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Scan, WhiteLabelSettings } from '../types';
-import { 
-  Download, Sparkles, CheckSquare, AlertTriangle, ShieldCheck, 
-  Clock, Server, HelpCircle, ChevronDown, ChevronUp, Image as ImageIcon, 
-  ExternalLink, FileSpreadsheet, Eye, ClipboardCheck
+import {
+  Download, Sparkles, CheckSquare, AlertTriangle, ShieldCheck,
+  Clock, Server, HelpCircle, ChevronDown, ChevronUp, Image as ImageIcon,
+  ExternalLink, FileSpreadsheet, Eye, ClipboardCheck, FileText
 } from 'lucide-react';
 
 interface ReportDashboardProps {
@@ -83,14 +83,25 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             {isEs ? 'Descarga un archivo HTML standalone auto-maquetado para imprimir y enviar por email.' : 'Equipped with custom logo, coloring schemes, and complete diagnostic descriptions.'}
           </p>
         </div>
-        <a
-          href={`/api/report/${scan.id}/download`}
-          target="_blank"
-          className="bg-gradient-to-tr from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98]"
-        >
-          <Download className="h-4 w-4" />
-          <span>{isEs ? 'Exportar Reporte Imprimible' : 'Export White-Label Report'}</span>
-        </a>
+        <div className="flex items-center gap-2.5">
+          <a
+            href={`/api/report/${scan.id}/download?format=pdf`}
+            target="_blank"
+            className="bg-gradient-to-tr from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98]"
+          >
+            <Download className="h-4 w-4" />
+            <span>{isEs ? 'Descargar PDF' : 'Download PDF'}</span>
+          </a>
+          <a
+            href={`/api/report/${scan.id}/download`}
+            target="_blank"
+            title={isEs ? 'Descargar como HTML' : 'Download as HTML'}
+            className="bg-white/10 hover:bg-white/15 text-slate-200 font-bold text-xs px-4 py-3.5 rounded-xl shadow cursor-pointer flex items-center gap-2 transition active:scale-[0.98] border border-white/10"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">{isEs ? 'HTML' : 'HTML'}</span>
+          </a>
+        </div>
       </div>
 
       {/* CORE STATS GRID */}

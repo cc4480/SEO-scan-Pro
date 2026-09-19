@@ -11,9 +11,11 @@ import { generateSeoReport } from './lib/deepseek';
 import { prisma } from './lib/db';
 import { hashPassword, verifyPassword, generateToken, generateResetToken, hashResetToken } from './lib/auth';
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from './lib/authMiddleware';
-import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema } from './lib/validation';
+import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, changeEmailSchema, deleteAccountSchema } from './lib/validation';
 import { validateEnv } from './lib/env';
 import { sendPasswordResetEmail } from './lib/email';
+import { sendWebhook } from './lib/webhook';
+import { renderHtmlToPdf } from './lib/pdf';
 import { Scan, WhiteLabelSettings } from './src/types';
 
 // In test runs, the integration suite makes far more than 10 auth calls across many
@@ -234,6 +236,73 @@ export function createApp() {
     }
   });
 
+  // Change password (while logged in — requires current password)
+  app.patch('/api/auth/change-password', authMiddleware, validateBody(changePasswordSchema), async (req: AuthRequest, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+      await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Change-password error:', err);
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  });
+
+  // Change email (requires current password)
+  app.patch('/api/auth/change-email', authMiddleware, validateBody(changeEmailSchema), async (req: AuthRequest, res) => {
+    try {
+      const { newEmail, currentPassword } = req.body;
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      const existing = await prisma.user.findUnique({ where: { email: newEmail } });
+      if (existing && existing.id !== user.id) {
+        return res.status(409).json({ error: 'That email is already in use' });
+      }
+
+      const updated = await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
+      res.json({ success: true, email: updated.email });
+    } catch (err) {
+      console.error('Change-email error:', err);
+      res.status(500).json({ error: 'Failed to change email' });
+    }
+  });
+
+  // Delete account (requires current password) — cascades scans & settings via FK onDelete
+  app.delete('/api/auth/account', authMiddleware, validateBody(deleteAccountSchema), async (req: AuthRequest, res) => {
+    try {
+      const { currentPassword } = req.body;
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const isValid = await verifyPassword(currentPassword, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Current password is incorrect' });
+      }
+
+      await prisma.user.delete({ where: { id: user.id } });
+      res.json({ success: true });
+    } catch (err) {
+      console.error('Delete-account error:', err);
+      res.status(500).json({ error: 'Failed to delete account' });
+    }
+  });
+
   // Get user settings
   app.get('/api/settings', authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -317,6 +386,21 @@ export function createApp() {
     }
   });
 
+  // Delete a scan
+  app.delete('/api/scans/:id', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await prisma.scan.deleteMany({
+        where: { id: req.params.id, userId: req.userId }
+      });
+      if (result.count === 0) {
+        return res.status(404).json({ error: 'Scan not found' });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete scan' });
+    }
+  });
+
   // Create new scan
   app.post('/api/scan', authMiddleware, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
     try {
@@ -372,7 +456,7 @@ export function createApp() {
         }
       });
 
-      scanAsync(scan.id, url, 'SINGLE', 1, user.id);
+      scanAsync(scan.id, url, 'SINGLE', 1, user.id, { email, name });
 
       res.status(202).json({
         success: true,
@@ -408,7 +492,17 @@ export function createApp() {
       });
 
       const reportHtml = generateReportHtml(scan as any, settings as any);
-      res.setHeader('Content-disposition', `attachment; filename=seo_audit_${scan.url.replace(/[^a-zA-Z0-9]/g, '_')}.html`);
+      const safeFilename = `seo_audit_${scan.url.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+      if (req.query.format === 'pdf') {
+        const pdfBuffer = await renderHtmlToPdf(reportHtml);
+        res.setHeader('Content-disposition', `attachment; filename=${safeFilename}.pdf`);
+        res.setHeader('Content-type', 'application/pdf');
+        res.send(pdfBuffer);
+        return;
+      }
+
+      res.setHeader('Content-disposition', `attachment; filename=${safeFilename}.html`);
       res.setHeader('Content-type', 'text/html');
       res.send(reportHtml);
     } catch (err) {
@@ -451,7 +545,14 @@ async function startServer() {
 // out from under it mid-flight (user deletes the scan, or their account, while this is still
 // running). Both updates below use updateMany, which is a no-op on zero matched rows instead
 // of throwing P2025 — a plain update() here would produce an unhandled rejection in that case.
-async function scanAsync(scanId: string, url: string, mode: 'SINGLE' | 'FULL_SITE', depth: number, userId: string) {
+async function scanAsync(
+  scanId: string,
+  url: string,
+  mode: 'SINGLE' | 'FULL_SITE',
+  depth: number,
+  userId: string,
+  lead?: { email: string; name?: string }
+) {
   try {
     console.log(`Starting scan ${scanId} for URL: ${url}`);
     const crawlRes = await crawlUrl(url, mode, depth);
@@ -467,6 +568,24 @@ async function scanAsync(scanId: string, url: string, mode: 'SINGLE' | 'FULL_SIT
     });
 
     console.log(`Scan ${scanId} completed successfully`);
+
+    // Widget-originated (lead) scans notify the agency's configured webhook, if any.
+    if (lead) {
+      const settings = await prisma.whiteLabelSettings.findUnique({ where: { userId } });
+      if (settings?.webhookUrl) {
+        await sendWebhook(settings.webhookUrl, settings.webhookSecret, {
+          event: 'seo_lead_captured',
+          timestamp: new Date().toISOString(),
+          agencyName: settings.agencyName,
+          scanId,
+          targetUrl: url,
+          leadEmail: lead.email,
+          leadName: lead.name,
+          overallScore: (seoReport as any).score?.overall,
+          criticalIssuesCount: (seoReport as any).criticalIssues?.length ?? 0
+        });
+      }
+    }
   } catch (err: any) {
     console.error(`Scan ${scanId} failed:`, err);
     await prisma.scan.updateMany({

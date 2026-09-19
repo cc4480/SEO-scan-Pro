@@ -188,7 +188,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
 
                 <div className="space-y-2 pt-2">
                   <a
-                    href={`/api/report/${testResult.scanId}/download`}
+                    href={`/api/report/${testResult.scanId}/download?format=pdf`}
                     target="_blank"
                     className="block w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-indigo-500/10"
                   >

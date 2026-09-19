@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { parsePage, crawlUrl } from '../../lib/crawler';
+import { closeBrowser } from '../../lib/browser';
 
 describe('parsePage', () => {
   it('extracts the title', () => {
@@ -133,37 +134,30 @@ describe('parsePage', () => {
   });
 });
 
+// The main page is now rendered through a real (headless) browser rather than a plain
+// fetch, so these exercise real network conditions instead of stubbing global.fetch —
+// consistent with how the integration suite already depends on real access to example.com.
 describe('crawlUrl fallback behavior', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  afterAll(async () => {
+    await closeBrowser();
   });
 
-  it('flags hasSimulatedData=true when the fetch throws (network failure)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
-    const result = await crawlUrl('https://unreachable-site.test', 'SINGLE', 1);
+  it('flags hasSimulatedData=true when the target cannot be resolved (DNS failure)', async () => {
+    const result = await crawlUrl('https://this-domain-definitely-does-not-exist-abc123xyz.test', 'SINGLE', 1);
     expect(result.hasSimulatedData).toBe(true);
     expect(result.mainPage.isSimulated).toBe(true);
-  });
+  }, 20000);
 
   it('flags hasSimulatedData=true when the target responds with a non-OK status', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => '' }));
-    const result = await crawlUrl('https://example.com/missing', 'SINGLE', 1);
+    const result = await crawlUrl('https://example.com/this-path-does-not-exist-12345', 'SINGLE', 1);
     expect(result.hasSimulatedData).toBe(true);
-  });
+  }, 20000);
 
-  it('does NOT flag hasSimulatedData when the fetch succeeds with real content', async () => {
-    vi.stubGlobal('fetch', vi.fn()
-      // robots.txt check
-      .mockResolvedValueOnce({ ok: false })
-      // sitemap check
-      .mockResolvedValueOnce({ ok: false })
-      // main page fetch
-      .mockResolvedValueOnce({ ok: true, text: async () => '<html><title>Real Page</title></html>' })
-    );
+  it('does NOT flag hasSimulatedData when the page renders successfully with real content', async () => {
     const result = await crawlUrl('https://example.com', 'SINGLE', 1);
     expect(result.hasSimulatedData).toBe(false);
-    expect(result.mainPage.meta.title).toBe('Real Page');
-  });
+    expect(result.mainPage.meta.title).toContain('Example Domain');
+  }, 20000);
 
   it('rejects a completely invalid URL', async () => {
     await expect(crawlUrl('not a url at all::::', 'SINGLE', 1)).rejects.toThrow();

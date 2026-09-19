@@ -75,6 +75,7 @@ model WhiteLabelSettings {
   enabledSections String[] @default(["executive", "technical", "content", "aeo-geo", "checklist"])
   language  String  @default("en") // en | es
   webhookUrl String?
+  webhookSecret String @default(cuid())
   monitoringEmail String?
   enableEmailAlerts Boolean @default(false)
 
