@@ -20,10 +20,25 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  scans    Scan[]
-  settings WhiteLabelSettings?
+  scans        Scan[]
+  settings     WhiteLabelSettings?
+  resetTokens  PasswordResetToken[]
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model Scan {

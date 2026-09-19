@@ -22,25 +22,35 @@
 #### Public Endpoints (No Auth Required)
 - `POST /api/auth/register` - Create new account
 - `POST /api/auth/login` - Login and get JWT token
+- `POST /api/auth/forgot-password` - Request a password reset link
+- `POST /api/auth/reset-password` - Complete a password reset with a valid token
 - `GET /api/health` - Health check
-- `POST /api/widget/scan` - Public lead magnet scan
+- `POST /api/widget/scan` - Public lead magnet scan (requires a valid `widgetKey`)
 
 #### Protected Endpoints (Auth Required)
-- `GET /api/auth/me` - Get current user info
-- `GET /api/scans` - List user's scans
+- `GET /api/auth/me` - Get current user info (incl. `widgetKey`)
+- `GET /api/scans` - List user's scans (paginated: `?page=&limit=`)
 - `GET /api/scans/:id` - Get single scan
 - `POST /api/scan` - Create new scan (async)
 - `GET /api/settings` - Get white-label settings
 - `POST /api/settings` - Update settings
-- `GET /api/report/:id/download` - Download HTML report
+- `GET /api/report/:id/download` - Download HTML report (public for widget-originated lead scans, owner-only otherwise)
 
 ### 4. **Frontend Auth UI**
-- **LoginForm.tsx** - Login page with email/password
+- **LoginForm.tsx** - Login page with email/password + "Forgot password?" link
 - **RegisterForm.tsx** - Registration page with validation
+- **ForgotPasswordForm.tsx** - Requests a reset link; shows the link directly in dev mode (no email provider wired up yet, see below)
+- **ResetPasswordForm.tsx** - Sets a new password given a valid token; reached via `/?resetToken=...`
 - **Updated App.tsx** - Auth state management & protected main app
 - Logout button in navbar
 - Auto-check authentication on page load
 - Redirect to login if not authenticated
+
+### 6. **Password Reset**
+- `PasswordResetToken` model: stores a SHA-256 hash of a random 32-byte token (not the raw token — same principle as never storing plaintext passwords), a 1-hour expiry, and a `usedAt` marker.
+- Requesting a reset invalidates any previous outstanding token for that user.
+- The response is identical whether or not the email exists, to avoid account enumeration.
+- **No real email provider is connected yet** — `lib/email.ts` logs what would be sent to the console. Outside `NODE_ENV=production`, the API response also includes a `devResetLink` field so the flow is testable end to end without checking logs. To go live, replace the body of `sendPasswordResetEmail` in `lib/email.ts` with a real provider call (Resend/SendGrid/Nodemailer) — no other code needs to change.
 
 ### 5. **Database Features**
 - User-scoped data (each user only sees their own scans)
@@ -308,10 +318,7 @@ cd C:\Users\cc448\SEO-scan-Pro
 ```
 
 ### Password reset
-For now, users cannot reset passwords. To implement:
-1. Add password reset endpoint
-2. Send email with reset link
-3. Verify token and update password
+Implemented — see section 6 above. `POST /api/auth/forgot-password` then `POST /api/auth/reset-password`. No real email provider is wired up yet, so the reset link is logged to the server console and returned as `devResetLink` outside production.
 
 Contact admin to reset if needed.
 

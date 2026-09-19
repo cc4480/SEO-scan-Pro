@@ -9,10 +9,11 @@ import rateLimit from 'express-rate-limit';
 import { crawlUrl } from './lib/crawler';
 import { generateSeoReport } from './lib/deepseek';
 import { prisma } from './lib/db';
-import { hashPassword, verifyPassword, generateToken } from './lib/auth';
+import { hashPassword, verifyPassword, generateToken, generateResetToken, hashResetToken } from './lib/auth';
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from './lib/authMiddleware';
-import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema } from './lib/validation';
+import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema } from './lib/validation';
 import { validateEnv } from './lib/env';
+import { sendPasswordResetEmail } from './lib/email';
 import { Scan, WhiteLabelSettings } from './src/types';
 
 // In test runs, the integration suite makes far more than 10 auth calls across many
@@ -134,6 +135,73 @@ export function createApp() {
     } catch (err: any) {
       console.error('Login error:', err);
       res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // Request a password reset
+  app.post('/api/auth/forgot-password', authLimiter, validateBody(forgotPasswordSchema), async (req, res) => {
+    try {
+      const { email } = req.body;
+      const user = await prisma.user.findUnique({ where: { email } });
+
+      // Always respond the same way whether or not the account exists —
+      // a different response would let an attacker enumerate registered emails.
+      const genericResponse = { message: 'If an account with that email exists, a password reset link has been sent.' };
+
+      if (!user) {
+        return res.json(genericResponse);
+      }
+
+      // Invalidate any previous outstanding tokens for this user before issuing a new one.
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user.id, usedAt: null } });
+
+      const { token, tokenHash } = generateResetToken();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await prisma.passwordResetToken.create({
+        data: { tokenHash, expiresAt, userId: user.id }
+      });
+
+      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const resetLink = `${appUrl}/?resetToken=${token}`;
+      await sendPasswordResetEmail(user.email, resetLink);
+
+      // No real email provider is wired up yet (see lib/email.ts) — surface the link
+      // directly outside production so the flow is actually testable end to end.
+      const devFields = process.env.NODE_ENV !== 'production' ? { devResetLink: resetLink } : {};
+
+      res.json({ ...genericResponse, ...devFields });
+    } catch (err) {
+      console.error('Forgot-password error:', err);
+      res.status(500).json({ error: 'Failed to process password reset request' });
+    }
+  });
+
+  // Complete a password reset
+  app.post('/api/auth/reset-password', authLimiter, validateBody(resetPasswordSchema), async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      const tokenHash = hashResetToken(token);
+
+      const resetToken = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+      if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date()) {
+        return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+      }
+
+      const hashedPassword = await hashPassword(password);
+
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: resetToken.userId }, data: { password: hashedPassword } }),
+        prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
+        // Any other outstanding tokens for this user are now moot.
+        prisma.passwordResetToken.deleteMany({ where: { userId: resetToken.userId, id: { not: resetToken.id } } })
+      ]);
+
+      res.json({ message: 'Password updated. You can now log in with your new password.' });
+    } catch (err) {
+      console.error('Reset-password error:', err);
+      res.status(500).json({ error: 'Failed to reset password' });
     }
   });
 

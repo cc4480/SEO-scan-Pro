@@ -9,6 +9,8 @@ import EmbedView from './components/EmbedView';
 import CompetitorBenchmark from './components/CompetitorBenchmark';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
+import ForgotPasswordForm from './components/Auth/ForgotPasswordForm';
+import ResetPasswordForm from './components/Auth/ResetPasswordForm';
 import {
   Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
   RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut
@@ -17,13 +19,26 @@ import {
 export default function App() {
   const isEmbedPage = typeof window !== 'undefined' && window.location.pathname === '/embed';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
+  const [resetToken, setResetToken] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string } | null>(null);
 
   if (isEmbedPage) {
     return <EmbedView />;
   }
+
+  // A password-reset link lands on the root path with ?resetToken=... — jump straight
+  // into the reset form rather than showing the normal login screen.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('resetToken');
+    if (token) {
+      setResetToken(token);
+      setAuthMode('reset');
+      // Clean the token out of the visible URL/history without a full navigation.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Loads /api/auth/me (incl. widgetKey) using whatever token is in localStorage
   const loadCurrentUser = async (): Promise<boolean> => {
@@ -65,14 +80,29 @@ export default function App() {
     );
   }
 
-  // Show login/register if not authenticated
+  // Show login/register/forgot/reset if not authenticated
   if (!isAuthenticated) {
+    if (authMode === 'forgot') {
+      return <ForgotPasswordForm onSwitchToLogin={() => setAuthMode('login')} />;
+    }
+    if (authMode === 'reset') {
+      return (
+        <ResetPasswordForm
+          token={resetToken}
+          onResetSuccess={() => {
+            setResetToken('');
+            setAuthMode('login');
+          }}
+        />
+      );
+    }
     return (
       <>
         {authMode === 'login' ? (
           <LoginForm
             onLoginSuccess={() => loadCurrentUser().then(() => setIsAuthenticated(true))}
             onSwitchToRegister={() => setAuthMode('register')}
+            onSwitchToForgotPassword={() => setAuthMode('forgot')}
           />
         ) : (
           <RegisterForm

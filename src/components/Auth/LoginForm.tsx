@@ -4,9 +4,10 @@ import { LogIn, Mail, Lock, AlertCircle, Loader } from 'lucide-react';
 interface LoginFormProps {
   onLoginSuccess: (token: string) => void;
   onSwitchToRegister: () => void;
+  onSwitchToForgotPassword: () => void;
 }
 
-export default function LoginForm({ onLoginSuccess, onSwitchToRegister }: LoginFormProps) {
+export default function LoginForm({ onLoginSuccess, onSwitchToRegister, onSwitchToForgotPassword }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -82,7 +83,16 @@ export default function LoginForm({ onLoginSuccess, onSwitchToRegister }: LoginF
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-slate-300">Password</label>
+                <button
+                  type="button"
+                  onClick={onSwitchToForgotPassword}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold transition"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-500" />
                 <input

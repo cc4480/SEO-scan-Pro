@@ -126,4 +126,4 @@ src/
 
 - The crawler parses raw HTML via regex — it does not execute JavaScript, so client-rendered (SPA) sites will audit as mostly empty.
 - "Export White-Label Report" downloads a standalone HTML file styled for browser print-to-PDF, not a server-generated PDF.
-- No password reset flow yet — see `AUTH_IMPLEMENTATION.md` for the current auth surface.
+- Password reset works end to end, but no real email provider is connected yet — the reset link is logged to the server console (and returned directly in non-production API responses). See `lib/email.ts` and `AUTH_IMPLEMENTATION.md`.
