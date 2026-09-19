@@ -7,16 +7,81 @@ import WhiteLabelEditor from './components/WhiteLabelEditor';
 import WidgetEmbedBuilder from './components/WidgetEmbedBuilder';
 import EmbedView from './components/EmbedView';
 import CompetitorBenchmark from './components/CompetitorBenchmark';
-import { 
+import LoginForm from './components/Auth/LoginForm';
+import RegisterForm from './components/Auth/RegisterForm';
+import {
   Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
-  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle
+  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut
 } from 'lucide-react';
 
 export default function App() {
   const isEmbedPage = typeof window !== 'undefined' && window.location.pathname === '/embed';
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string } | null>(null);
 
   if (isEmbedPage) {
     return <EmbedView />;
+  }
+
+  // Loads /api/auth/me (incl. widgetKey) using whatever token is in localStorage
+  const loadCurrentUser = async (): Promise<boolean> => {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const user = await res.json();
+        setCurrentUser(user);
+        return true;
+      }
+      localStorage.removeItem('token');
+      return false;
+    } catch {
+      localStorage.removeItem('token');
+      return false;
+    }
+  };
+
+  // Check authentication on mount
+  useEffect(() => {
+    loadCurrentUser()
+      .then(ok => setIsAuthenticated(ok))
+      .finally(() => setIsCheckingAuth(false));
+  }, []);
+
+  // Show loading state while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-300 text-sm">Loading application...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login/register if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <>
+        {authMode === 'login' ? (
+          <LoginForm
+            onLoginSuccess={() => loadCurrentUser().then(() => setIsAuthenticated(true))}
+            onSwitchToRegister={() => setAuthMode('register')}
+          />
+        ) : (
+          <RegisterForm
+            onRegisterSuccess={() => loadCurrentUser().then(() => setIsAuthenticated(true))}
+            onSwitchToLogin={() => setAuthMode('login')}
+          />
+        )}
+      </>
+    );
   }
 
   const [scans, setScans] = useState<Scan[]>([]);
@@ -36,10 +101,21 @@ export default function App() {
   const [apiStatusMsg, setApiStatusMsg] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` })
+    };
+  };
+
   // Load Database stats on bootstrap
   const loadDatabase = async () => {
     try {
-      const scansRes = await fetch('/api/scans');
+      const scansRes = await fetch('/api/scans', {
+        headers: getAuthHeaders()
+      });
       if (scansRes.ok) {
         const scansData = await scansRes.json();
         setScans(scansData);
@@ -50,7 +126,9 @@ export default function App() {
         }
       }
 
-      const settingsRes = await fetch('/api/settings');
+      const settingsRes = await fetch('/api/settings', {
+        headers: getAuthHeaders()
+      });
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setSettings(settingsData);
@@ -90,7 +168,7 @@ export default function App() {
     try {
       const response = await fetch('/api/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
       clearInterval(interval);
@@ -102,7 +180,7 @@ export default function App() {
 
       const completedScan = await response.json();
       setActiveScan(completedScan);
-      
+
       // Reload lists
       await loadDatabase();
     } catch (err: any) {
@@ -120,7 +198,7 @@ export default function App() {
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(updatedSettings)
       });
       if (res.ok) {
@@ -134,6 +212,13 @@ export default function App() {
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
   };
 
   return (
@@ -162,7 +247,7 @@ export default function App() {
           </div>
 
           {/* Quick Stats Badges for branding context */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-6">
             <div className="text-right">
               <div className="text-[9px] text-slate-400 uppercase font-black">Scans Logged</div>
               <div className="text-xs font-bold text-slate-200">{scans.length} Audits</div>
@@ -172,6 +257,14 @@ export default function App() {
               <div className="text-[9px] text-slate-400 uppercase font-black">Active Mode</div>
               <div className="text-xs font-bold text-blue-400">Enterprise Agency</div>
             </div>
+            <div className="h-6 w-px bg-white/10" />
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-xs font-bold text-slate-300 hover:text-white transition px-3 py-1.5 rounded-lg hover:bg-white/10"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       </nav>
@@ -342,7 +435,7 @@ export default function App() {
           {/* TAB 4: CLIENT EMBED MAGNETS */}
           {activeTab === 'widget' && (
             <div className="max-w-4xl mx-auto">
-              <WidgetEmbedBuilder appUrl="" />
+              <WidgetEmbedBuilder appUrl="" widgetKey={currentUser?.widgetKey || ''} />
             </div>
           )}
 

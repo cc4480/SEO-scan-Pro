@@ -9,6 +9,10 @@ export default function EmbedView() {
   const [testResult, setTestResult] = useState<any | null>(null);
   const [statusMessage, setStatusMessage] = useState('');
 
+  const widgetKey = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('key') || ''
+    : '';
+
   const widgetTicks = [
     'Verifying url hostname connectivity...',
     'Scanned robots.txt guidelines & sitemap hierarchies...',
@@ -21,6 +25,11 @@ export default function EmbedView() {
   const handleWidgetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim() || !email.trim()) return;
+
+    if (!widgetKey) {
+      alert('This widget is not correctly configured (missing key). Please contact the site owner.');
+      return;
+    }
 
     let cleanUrl = url.trim();
     if (!/^https?:\/\//i.test(cleanUrl)) {
@@ -43,7 +52,7 @@ export default function EmbedView() {
       const response = await fetch('/api/widget/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: cleanUrl, email: email.trim(), name: name.trim() })
+        body: JSON.stringify({ url: cleanUrl, email: email.trim(), name: name.trim(), widgetKey })
       });
       clearInterval(interval);
 

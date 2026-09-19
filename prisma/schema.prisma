@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  widgetKey String   @unique @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  scans    Scan[]
+  settings WhiteLabelSettings?
+
+  @@map("users")
+}
+
+model Scan {
+  id        String   @id @default(cuid())
+  url       String
+  mode      String   @default("SINGLE") // SINGLE | FULL_SITE
+  depth     Int      @default(1)
+  status    String   @default("PENDING") // PENDING | COMPLETED | FAILED
+
+  leadEmail String?
+  leadName  String?
+
+  crawlData Json?
+  seoReport Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("scans")
+}
+
+model WhiteLabelSettings {
+  id        String   @id @default(cuid())
+  agencyName String  @default("SEO Scan Elite")
+  logoUrl   String?
+  primaryColor String @default("#0ea5e9")
+  accentColor String @default("#1e40af")
+  customFooter String @default("Report provided by SEO Scan Pro • Powered by DeepSeek V4.")
+  enabledSections String[] @default(["executive", "technical", "content", "aeo-geo", "checklist"])
+  language  String  @default("en") // en | es
+  webhookUrl String?
+  monitoringEmail String?
+  enableEmailAlerts Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("white_label_settings")
+}

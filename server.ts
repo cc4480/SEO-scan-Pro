@@ -1,260 +1,419 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import fs from 'fs';
+import { pathToFileURL } from 'url';
 import { createServer as createViteServer } from 'vite';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { crawlUrl } from './lib/crawler';
 import { generateSeoReport } from './lib/deepseek';
+import { prisma } from './lib/db';
+import { hashPassword, verifyPassword, generateToken } from './lib/auth';
+import { authMiddleware, optionalAuthMiddleware, AuthRequest } from './lib/authMiddleware';
+import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema } from './lib/validation';
+import { validateEnv } from './lib/env';
 import { Scan, WhiteLabelSettings } from './src/types';
 
-// Establish relative folder context
-const DB_PATH = path.join(process.cwd(), 'db.json');
+// In test runs, the integration suite makes far more than 10 auth calls across many
+// independent test cases against the same shared limiter instance — a low production
+// limit here would make the suite flaky/order-dependent rather than actually testing anything.
+// Rate-limiting behavior itself is covered separately by a dedicated unit test with its own limiter.
+const isTestEnv = process.env.NODE_ENV === 'test';
 
-// Initialize local persistent Database with gorgeous presets
-const defaultSettings: WhiteLabelSettings = {
-  agencyName: 'SEO Scan Elite',
-  primaryColor: '#0ea5e9', // Deep sky blue
-  accentColor: '#1e40af',  // Royal accent blue
-  customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
-  enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
-  language: 'en'
-};
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' }
+});
 
-function readDb() {
-  try {
-    if (!fs.existsSync(DB_PATH)) {
-      const initial = { scans: [] as Scan[], settings: defaultSettings };
-      fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
-      return initial;
-    }
-    const raw = fs.readFileSync(DB_PATH, 'utf-8');
-    return JSON.parse(raw);
-  } catch (err) {
-    console.warn('Error reading db.json, returning empty memory store', err);
-    return { scans: [] as Scan[], settings: defaultSettings };
-  }
-}
+const widgetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many scan requests from this device. Please try again later.' }
+});
 
-function writeDb(data: any) {
-  try {
-    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error('Failed writing to db.json', err);
-  }
-}
-
-async function startServer() {
+export function createApp() {
   const app = express();
-  const PORT = 3000;
 
-  // Mount JSON parser body helpers
+  app.use(helmet({
+    contentSecurityPolicy: false // report HTML pages inject inline Tailwind/scripts; CSP handled at report level separately
+  }));
   app.use(express.json());
+  app.use(cors({
+    origin: process.env.APP_URL || 'http://localhost:3000',
+    credentials: true
+  }));
 
-  // API ENDPOINTS FIRST
+  // ===== AUTHENTICATION ENDPOINTS =====
 
-  // 1. Health Ping
+  // Register endpoint
+  app.post('/api/auth/register', authLimiter, validateBody(registerSchema), async (req, res) => {
+    try {
+      const { email, password, name } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(409).json({ error: 'Email already registered' });
+      }
+
+      const hashedPassword = await hashPassword(password);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name: name || undefined,
+          settings: {
+            create: {
+              agencyName: 'SEO Scan Elite',
+              primaryColor: '#0ea5e9',
+              accentColor: '#1e40af',
+              customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
+              enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
+              language: 'en'
+            }
+          }
+        }
+      });
+
+      const token = generateToken(user.id);
+      res.status(201).json({
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      });
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      res.status(500).json({ error: 'Registration failed' });
+    }
+  });
+
+  // Login endpoint
+  app.post('/api/auth/login', authLimiter, validateBody(loginSchema), async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+      }
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const isValid = await verifyPassword(password, user.password);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const token = generateToken(user.id);
+      res.json({
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt
+        }
+      });
+    } catch (err: any) {
+      console.error('Login error:', err);
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
   });
 
-  // 2. Scan Settings
-  app.get('/api/settings', (req, res) => {
-    const db = readDb();
-    res.json(db.settings || defaultSettings);
-  });
+  // ===== PROTECTED ENDPOINTS (Require Authentication) =====
 
-  app.post('/api/settings', (req, res) => {
-    const db = readDb();
-    const cleanSettings: WhiteLabelSettings = {
-      agencyName: req.body.agencyName || defaultSettings.agencyName,
-      logoUrl: req.body.logoUrl || '',
-      primaryColor: req.body.primaryColor || defaultSettings.primaryColor,
-      accentColor: req.body.accentColor || defaultSettings.accentColor,
-      customFooter: req.body.customFooter || defaultSettings.customFooter,
-      enabledSections: Array.isArray(req.body.enabledSections) ? req.body.enabledSections : defaultSettings.enabledSections,
-      language: req.body.language === 'es' ? 'es' : 'en',
-      webhookUrl: req.body.webhookUrl || '',
-      monitoringEmail: req.body.monitoringEmail || '',
-      enableEmailAlerts: !!req.body.enableEmailAlerts
-    };
-    db.settings = cleanSettings;
-    writeDb(db);
-    res.json({ success: true, settings: cleanSettings });
-  });
-
-  // 3. Lists Search Scans
-  app.get('/api/scans', (req, res) => {
-    const db = readDb();
-    // Sort chronological descending
-    const sorted = [...db.scans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(sorted);
-  });
-
-  // 4. GET individual audit
-  app.get('/api/scans/:id', (req, res) => {
-    const db = readDb();
-    const audit = db.scans.find((s: Scan) => s.id === req.params.id);
-    if (!audit) {
-      return res.status(404).json({ error: 'Audit profile not found' });
-    }
-    res.json(audit);
-  });
-
-  // 5. POST Action: Run new scan
-  app.post('/api/scan', async (req, res) => {
-    const { url, mode, depth, leadInfo } = req.body;
-    if (!url) {
-      return res.status(400).json({ error: 'Target scanning URL is required' });
-    }
-
-    const db = readDb();
-    const scanId = 'scan_' + Math.random().toString(36).substr(2, 9);
-    
-    // Find previous scan of this URL for comparative chronological graphing
-    const formattedTarget = url.toLowerCase().trim().replace(/https?:\/\//, '');
-    const previous = db.scans.find((s: Scan) => 
-      s.status === 'COMPLETED' && 
-      s.url.toLowerCase().trim().replace(/https?:\/\//, '') === formattedTarget
-    );
-
-    const newScan: Scan = {
-      id: scanId,
-      url,
-      mode: mode === 'FULL_SITE' ? 'FULL_SITE' : 'SINGLE',
-      depth: parseInt(depth) || 1,
-      status: 'PENDING',
-      leadInfo,
-      previousReportId: previous ? previous.id : undefined,
-      createdAt: new Date().toISOString()
-    };
-
-    // Store pending status so it has visual list response immediately
-    db.scans.push(newScan);
-    writeDb(db);
-
-    // Run active scan asynchronously or resolve as blocked to avoid server timeout bottlenecks
+  // Get current user
+  app.get('/api/auth/me', authMiddleware, async (req: AuthRequest, res) => {
     try {
-      console.log(`Starting crawl process for URL: ${url} (Mode: ${mode})`);
-      const crawlRes = await crawlUrl(url, newScan.mode, newScan.depth);
-      console.log(`Crawl completed. Resolving deep intelligence with Gemini API...`);
-      const seoReport = await generateSeoReport(crawlRes);
-
-      // Reload database to prevent race overrides
-      const dbReload = readDb();
-      const targetScan = dbReload.scans.find((s: Scan) => s.id === scanId);
-      if (targetScan) {
-        targetScan.status = 'COMPLETED';
-        targetScan.crawlResult = crawlRes;
-        targetScan.seoReport = seoReport;
-        writeDb(dbReload);
-        res.json(targetScan);
-      } else {
-        res.status(500).json({ error: 'Scan profile lost during calculation write-back.' });
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId }
+      });
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    } catch (err: any) {
-      console.error(`Core audit pipeline collapsed for url: ${url}`, err);
-      const dbReload = readDb();
-      const targetScan = dbReload.scans.find((s: Scan) => s.id === scanId);
-      if (targetScan) {
-        targetScan.status = 'FAILED';
-        writeDb(dbReload);
-      }
-      res.status(500).json({ error: err?.message || 'Calculation engine failure' });
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        widgetKey: user.widgetKey,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch user' });
     }
   });
 
-  // 6. Lead Magnet public script widget endpoint
-  app.post('/api/widget/scan', async (req, res) => {
-    const { url, email, name, agencyId } = req.body;
-    if (!url || !email) {
-      return res.status(400).json({ error: 'Missing required parameters [url, email] for widget inquiry.' });
-    }
-
-    const db = readDb();
-    const scanId = 'lead_' + Math.random().toString(36).substr(2, 9);
-
-    const newScan: Scan = {
-      id: scanId,
-      url,
-      mode: 'SINGLE',
-      depth: 1,
-      status: 'PENDING',
-      leadInfo: { email, name, agencyId },
-      createdAt: new Date().toISOString()
-    };
-
-    db.scans.push(newScan);
-    writeDb(db);
-
+  // Get user settings
+  app.get('/api/settings', authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const crawlRes = await crawlUrl(url, 'SINGLE', 1);
-      const seoReport = await generateSeoReport(crawlRes);
+      const settings = await prisma.whiteLabelSettings.findUnique({
+        where: { userId: req.userId }
+      });
+      if (!settings) {
+        return res.status(404).json({ error: 'Settings not found' });
+      }
+      res.json(settings);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch settings' });
+    }
+  });
 
-      const dbReload = readDb();
-      const targetScan = dbReload.scans.find((s: Scan) => s.id === scanId);
-      const activeSettings = dbReload.settings || defaultSettings;
-
-      if (targetScan) {
-        targetScan.status = 'COMPLETED';
-        targetScan.crawlResult = crawlRes;
-        targetScan.seoReport = seoReport;
-        writeDb(dbReload);
-
-        // Async Webhook pipeline integration (no-blocking failure path)
-        if (activeSettings.webhookUrl) {
-          fetch(activeSettings.webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'seo_lead_captured',
-              timestamp: new Date().toISOString(),
-              agencyName: activeSettings.agencyName,
-              scanId,
-              targetUrl: url,
-              leadName: name,
-              leadEmail: email,
-              overallScore: seoReport.score.overall,
-              criticalIssuesCount: seoReport.criticalIssues.length
-            })
-          }).catch(webhookErr => {
-            console.error('Agency lead magnet webhook failed to respond:', webhookErr);
-          });
+  // Update user settings
+  app.post('/api/settings', authMiddleware, validateBody(settingsSchema), async (req: AuthRequest, res) => {
+    try {
+      const settings = await prisma.whiteLabelSettings.update({
+        where: { userId: req.userId },
+        data: {
+          agencyName: req.body.agencyName,
+          logoUrl: req.body.logoUrl,
+          primaryColor: req.body.primaryColor,
+          accentColor: req.body.accentColor,
+          customFooter: req.body.customFooter,
+          enabledSections: req.body.enabledSections,
+          language: req.body.language,
+          webhookUrl: req.body.webhookUrl,
+          monitoringEmail: req.body.monitoringEmail,
+          enableEmailAlerts: req.body.enableEmailAlerts
         }
-
-        res.json({ 
-          success: true, 
-          scanId,
-          score: seoReport.score.overall,
-          criticalIssuesCount: seoReport.criticalIssues.length,
-          executiveSummary: seoReport.executiveSummary,
-          report: seoReport
-        });
-      }
-    } catch (err: any) {
-      const dbReload = readDb();
-      const targetScan = dbReload.scans.find((s: Scan) => s.id === scanId);
-      if (targetScan) {
-        targetScan.status = 'FAILED';
-        writeDb(dbReload);
-      }
-      res.status(500).json({ error: 'Widget audit engine halted temporarily.' });
+      });
+      res.json({ success: true, settings });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update settings' });
     }
   });
 
-  // 7. GET: Download White-Label standalone HTML report
-  app.get('/api/report/:id/download', (req, res) => {
-    const db = readDb();
-    const scan = db.scans.find((s: Scan) => s.id === req.params.id);
-    if (!scan || scan.status !== 'COMPLETED') {
-      return res.status(404).send('<h1>No audited report available for download yet</h1>');
+  // Get all scans for user
+  app.get('/api/scans', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      // Capped + paginated to avoid an unbounded query as scan history grows.
+      // Response stays a plain array for backward compatibility; total count comes back
+      // via the X-Total-Count header for callers that want to build real pagination UI.
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+
+      const [scans, total] = await Promise.all([
+        prisma.scan.findMany({
+          where: { userId: req.userId },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit
+        }),
+        prisma.scan.count({ where: { userId: req.userId } })
+      ]);
+
+      res.setHeader('X-Total-Count', total.toString());
+      res.json(scans);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch scans' });
     }
+  });
 
-    const set = db.settings || defaultSettings;
-    const isEs = set.language === 'es';
+  // Get single scan
+  app.get('/api/scans/:id', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const scan = await prisma.scan.findFirst({
+        where: {
+          id: req.params.id,
+          userId: req.userId
+        }
+      });
+      if (!scan) {
+        return res.status(404).json({ error: 'Scan not found' });
+      }
+      res.json(scan);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch scan' });
+    }
+  });
 
-    // Build a neat standalone, single-file HTML wrapper containing fully compiled audits
-    // This allows downloading an elegant offline version representing the white-label branding flawlessly!
-    const customTitle = isEs ? 'Auditoría SEO Profesional' : 'Professional SEO Audit';
-    const reportHtml = `
+  // Create new scan
+  app.post('/api/scan', authMiddleware, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
+    try {
+      const { url, mode, depth, leadEmail, leadName } = req.body;
+
+      if (!url) {
+        return res.status(400).json({ error: 'URL is required' });
+      }
+
+      const newScan = await prisma.scan.create({
+        data: {
+          url,
+          mode: mode === 'FULL_SITE' ? 'FULL_SITE' : 'SINGLE',
+          depth: parseInt(depth) || 1,
+          status: 'PENDING',
+          leadEmail,
+          leadName,
+          userId: req.userId
+        }
+      });
+
+      // Start scan asynchronously
+      scanAsync(newScan.id, url, newScan.mode as 'SINGLE' | 'FULL_SITE', newScan.depth, req.userId);
+
+      res.status(202).json(newScan);
+    } catch (err: any) {
+      console.error('Scan creation error:', err);
+      res.status(500).json({ error: 'Failed to create scan' });
+    }
+  });
+
+  // Public widget endpoint (no auth required for lead capture)
+  app.post('/api/widget/scan', widgetLimiter, validateBody(widgetScanSchema), async (req, res) => {
+    try {
+      const { url, email, name, widgetKey } = req.body;
+
+      // The widget key identifies which agency's account owns this lead —
+      // without it, leads would silently attach to an arbitrary user (see AUTH_IMPLEMENTATION.md history).
+      const user = await prisma.user.findUnique({ where: { widgetKey } });
+      if (!user) {
+        return res.status(404).json({ error: 'Invalid widget key. This embed is not linked to an active account.' });
+      }
+
+      const scan = await prisma.scan.create({
+        data: {
+          url,
+          mode: 'SINGLE',
+          depth: 1,
+          status: 'PENDING',
+          leadEmail: email,
+          leadName: name,
+          userId: user.id
+        }
+      });
+
+      scanAsync(scan.id, url, 'SINGLE', 1, user.id);
+
+      res.status(202).json({
+        success: true,
+        scanId: scan.id,
+        message: 'Scan queued for processing'
+      });
+    } catch (err) {
+      console.error('Widget scan error:', err);
+      res.status(500).json({ error: 'Widget scan failed' });
+    }
+  });
+
+  // Download report
+  // Public widget leads (scans with a leadEmail) are downloadable without auth — the
+  // anonymous prospect who ran the widget scan needs to fetch their own report.
+  // Owner-run scans (no leadEmail) still require the owning user's auth token.
+  app.get('/api/report/:id/download', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const scan = await prisma.scan.findUnique({ where: { id: req.params.id } });
+
+      if (!scan || scan.status !== 'COMPLETED' || !scan.seoReport) {
+        return res.status(404).send('<h1>Report not available</h1>');
+      }
+
+      const isPublicLeadScan = !!scan.leadEmail;
+      const isOwner = req.userId === scan.userId;
+      if (!isPublicLeadScan && !isOwner) {
+        return res.status(401).send('<h1>Not authorized to view this report</h1>');
+      }
+
+      const settings = await prisma.whiteLabelSettings.findUnique({
+        where: { userId: scan.userId }
+      });
+
+      const reportHtml = generateReportHtml(scan as any, settings as any);
+      res.setHeader('Content-disposition', `attachment; filename=seo_audit_${scan.url.replace(/[^a-zA-Z0-9]/g, '_')}.html`);
+      res.setHeader('Content-type', 'text/html');
+      res.send(reportHtml);
+    } catch (err) {
+      console.error('Report download error:', err);
+      res.status(500).json({ error: 'Failed to download report' });
+    }
+  });
+
+  return app;
+}
+
+async function startServer() {
+  validateEnv();
+
+  const app = createApp();
+  const PORT = 3000;
+
+  // ===== VITE DEV SERVER SETUP =====
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa'
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`SEO Scan Pro v1.1 full-stack gateway hosted beautifully on port ${PORT}`);
+  });
+}
+
+// Async scan processor
+// Runs fire-and-forget (not awaited by the route handler), so the scan row can be deleted
+// out from under it mid-flight (user deletes the scan, or their account, while this is still
+// running). Both updates below use updateMany, which is a no-op on zero matched rows instead
+// of throwing P2025 — a plain update() here would produce an unhandled rejection in that case.
+async function scanAsync(scanId: string, url: string, mode: 'SINGLE' | 'FULL_SITE', depth: number, userId: string) {
+  try {
+    console.log(`Starting scan ${scanId} for URL: ${url}`);
+    const crawlRes = await crawlUrl(url, mode, depth);
+    const seoReport = await generateSeoReport(crawlRes);
+
+    await prisma.scan.updateMany({
+      where: { id: scanId },
+      data: {
+        status: 'COMPLETED',
+        crawlData: crawlRes as any,
+        seoReport: seoReport as any
+      }
+    });
+
+    console.log(`Scan ${scanId} completed successfully`);
+  } catch (err: any) {
+    console.error(`Scan ${scanId} failed:`, err);
+    await prisma.scan.updateMany({
+      where: { id: scanId },
+      data: { status: 'FAILED' }
+    });
+  }
+}
+
+// Report HTML generator
+function generateReportHtml(scan: any, settings: any): string {
+  const isEs = settings?.language === 'es';
+  const customTitle = isEs ? 'Auditoría SEO Profesional' : 'Professional SEO Audit';
+
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -268,18 +427,25 @@ async function startServer() {
     @media print {
       .no-print { display: none !important; }
       body { background: white; color: black; }
-      .page-break { page-break-after: always; }
     }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 p-6 md:p-12">
-  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 p-8 md:p-12 relative">
-    
-    <!-- HEADER BAR -->
+  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 p-8 md:p-12">
+    ${scan.crawlData?.hasSimulatedData ? `
+    <div class="mb-8 p-5 rounded-2xl bg-red-50 border-2 border-red-200 flex items-start gap-3">
+      <span class="text-red-500 font-bold text-lg leading-none">&#9888;</span>
+      <div>
+        <h3 class="font-extrabold text-red-800 text-sm uppercase tracking-wide">${isEs ? 'Datos Simulados — No es una Auditoría Real' : 'Simulated Data — Not a Real Audit'}</h3>
+        <p class="text-xs text-red-700 mt-1 leading-relaxed">${isEs
+          ? 'No se pudo acceder al sitio de destino durante este escaneo. Los datos a continuación son marcadores de posición ilustrativos, no un análisis real.'
+          : 'The target site could not be reached during this scan. The data below is an illustrative placeholder, not a real analysis of the site.'}</p>
+      </div>
+    </div>
+    ` : ''}
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-8 mb-8">
       <div>
-        ${set.logoUrl ? `<img src="${set.logoUrl}" alt="Logo" class="h-12 mb-4 object-contain">` : ''}
-        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${set.primaryColor}">${set.agencyName || 'SEO Analytics'}</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${settings?.primaryColor || '#0ea5e9'}">${settings?.agencyName || 'SEO Scan Pro'}</h1>
         <p class="text-slate-500 font-medium text-sm mt-1">${customTitle}</p>
       </div>
       <div class="mt-4 md:mt-0 text-left md:text-right">
@@ -290,160 +456,54 @@ async function startServer() {
       </div>
     </div>
 
-    <!-- MAIN SCORES -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
-        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Overall</span>
-        <div class="text-4xl font-extrabold mt-2" style="color: ${set.primaryColor}">${scan.seoReport?.score.overall}/100</div>
+        <span class="text-xs text-slate-400 uppercase font-bold">Overall</span>
+        <div class="text-4xl font-extrabold mt-2" style="color: ${settings?.primaryColor || '#0ea5e9'}">${scan.seoReport?.score?.overall || 0}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
-        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Technical</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score.technical}/100</div>
+        <span class="text-xs text-slate-400 uppercase font-bold">Technical</span>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.technical || 0}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
-        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Content</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score.content}/100</div>
+        <span class="text-xs text-slate-400 uppercase font-bold">Content</span>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.content || 0}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
-        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">AEO & AI</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score.aeoGeo}/100</div>
+        <span class="text-xs text-slate-400 uppercase font-bold">AEO & AI</span>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.aeoGeo || 0}/100</div>
       </div>
-      <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm col-span-2 lg:col-span-1">
-        <span class="text-xs text-slate-400 uppercase font-bold tracking-wider">Performance</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score.performance}/100</div>
+      <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
+        <span class="text-xs text-slate-400 uppercase font-bold">Performance</span>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.performance || 0}/100</div>
       </div>
     </div>
 
-    <!-- EXECUTIVE ANALYSIS -->
     <div class="mb-8 p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-100">
-      <h2 class="text-xl font-bold mb-3 flex items-center" style="color: ${set.primaryColor}">
-        Executive Summary
-      </h2>
-      <p class="text-slate-600 leading-relaxed text-sm">${scan.seoReport?.executiveSummary}</p>
+      <h2 class="text-xl font-bold mb-3" style="color: ${settings?.primaryColor || '#0ea5e9'}">Executive Summary</h2>
+      <p class="text-slate-600 leading-relaxed text-sm">${scan.seoReport?.executiveSummary || 'N/A'}</p>
     </div>
 
-    <!-- CRITICAL WARNINGS -->
-    <div class="mb-8">
-      <h2 class="text-lg font-bold text-red-700 mb-4 border-b border-red-100 pb-2">Critical Red Flags</h2>
-      <ul class="space-y-2">
-        ${scan.seoReport?.criticalIssues.map(issue => `
-          <li class="flex items-start bg-red-50 text-red-800 p-3 rounded-lg text-sm border-l-4 border-red-600">
-            <span class="mr-2 font-bold select-none">•</span>
-            <span>${issue}</span>
-          </li>
-        `).join('')}
-      </ul>
-    </div>
-
-    <!-- DETAILED AUDIT SPEC -->
-    <div class="mb-8">
-      <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Specific Action Items</h2>
-      <div class="space-y-4">
-        ${scan.seoReport?.recommendedFixes.map(fix => `
-          <div class="border border-slate-100 rounded-xl p-5 hover:bg-slate-50 bg-white shadow-sm transition">
-            <div class="flex items-center space-x-2 mb-2">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                fix.priority === 'high' ? 'bg-red-100 text-red-700' : 
-                fix.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
-              }">${fix.priority} priority</span>
-              <span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-semibold uppercase">${fix.category}</span>
-            </div>
-            <h3 class="font-bold text-slate-800 text-sm mb-1">${fix.title}</h3>
-            <p class="text-xs text-slate-500 mb-2">${fix.description}</p>
-            <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 mt-2">
-              <div class="text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Development Specs</div>
-              <p class="text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-line">${fix.remediation}</p>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-
-    <!-- AEO ASSESSMENT -->
-    <div class="mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-      <h2 class="text-lg font-bold mb-4 text-slate-800">Generative Engine Optimization (GEO/AEO)</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <span class="text-xs text-slate-400">AI Trust Score</span>
-          <div class="text-2xl font-bold" style="color: ${set.accentColor}">${scan.seoReport?.aeoAssessment.generativeFriendlinessScore}/100</div>
-          <p class="text-xs text-slate-500 mt-2">${scan.seoReport?.aeoAssessment.directAnswerFriendliness}</p>
-        </div>
-        <div>
-          <span class="text-xs text-slate-400">AI Target Recommendations</span>
-          <ul class="space-y-1.5 mt-2">
-            ${scan.seoReport?.aeoAssessment.recommendationsForAeo.map(rec => `
-              <li class="text-xs text-slate-600 flex items-start">
-                <span class="mr-1.5 text-blue-500 font-bold">•</span>
-                <span>${rec}</span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
-      </div>
-    </div>
-
-    <!-- TECH METRICS SUMMARY -->
-    <div class="mb-12">
-      <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Technical Crawl Statistics</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-          <div class="text-xs text-slate-400 font-medium">Load Delay</div>
-          <div class="text-xl font-bold text-slate-700 mt-1">${scan.crawlResult?.mainPage?.loadTimeMs || 0} ms</div>
-        </div>
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-          <div class="text-xs text-slate-400 font-medium">Page Weight</div>
-          <div class="text-xl font-bold text-slate-700 mt-1">${scan.crawlResult?.mainPage?.pageSizeKb || 0} KB</div>
-        </div>
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-          <div class="text-xs text-slate-400 font-medium font-medium">Image Count (No Alt)</div>
-          <div class="text-xl font-bold text-red-700 mt-1">${scan.crawlResult?.mainPage?.images?.total || 0} (${scan.crawlResult?.mainPage?.images?.missingAlt || 0})</div>
-        </div>
-        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-          <div class="text-xs text-slate-400 font-medium">Sitemap Status</div>
-          <div class="text-xl font-bold mt-1 ${scan.crawlResult?.sitemapFound ? 'text-emerald-700' : 'text-red-700'}">
-            ${scan.crawlResult?.sitemapFound ? 'Found' : 'Missing'}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- FOOTER -->
     <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-      <p>${set.customFooter}</p>
-      <button class="no-print mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm shadow inline-flex items-center space-x-2 transition cursor-pointer" onclick="window.print()">
-        <span>Print Report / Save to PDF</span>
+      <p>${settings?.customFooter || 'Report provided by SEO Scan Pro'}</p>
+      <button class="no-print mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm shadow inline-block transition cursor-pointer" onclick="window.print()">
+        Print Report / Save to PDF
       </button>
     </div>
-
   </div>
 </body>
 </html>
-    `;
-
-    res.setHeader('Content-disposition', `attachment; filename=seo_audit_${scan.url.replace(/[^a-zA-Z0-9]/g, '_')}.html`);
-    res.setHeader('Content-type', 'text/html');
-    res.send(reportHtml);
-  });
-
-  // VITE DEV / PRODUCTION INGRESS HANDLERS
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa'
-    });
-    app.use(vite.middlewares);
-  } else {
-    // Production static asset serving
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`SEO Scan Pro v1.1 full-stack gateway hosted beautifully on port ${PORT}`);
-  });
+  `;
 }
 
-startServer();
+// Only auto-boot when this file is run directly (e.g. `tsx server.ts`), not when
+// `createApp` is imported elsewhere — such as from the test suite via supertest.
+// pathToFileURL handles platform differences correctly (Windows needs `file:///C:/...`,
+// which a hand-rolled `file://` + path string gets wrong by one slash).
+const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isEntryPoint) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

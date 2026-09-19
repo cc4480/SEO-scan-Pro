@@ -3,9 +3,10 @@ import { Code, Share2, Copy, Check, Sparkles, Mail, Send, Award } from 'lucide-r
 
 interface WidgetEmbedBuilderProps {
   appUrl: string;
+  widgetKey: string;
 }
 
-export default function WidgetEmbedBuilder({ appUrl }: WidgetEmbedBuilderProps) {
+export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBuilderProps) {
   const [copied, setCopied] = useState(false);
   const [url, setUrl] = useState('');
   const [email, setEmail] = useState('');
@@ -15,7 +16,7 @@ export default function WidgetEmbedBuilder({ appUrl }: WidgetEmbedBuilderProps) 
 
   // Fallback to current window host if appUrl is undefined/blank
   const baseHost = appUrl || window.location.origin;
-  const embedCode = `<iframe src="${baseHost}/embed" width="100%" height="480" style="border:none; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.05);" title="Free SEO Audit Widget"></iframe>`;
+  const embedCode = `<iframe src="${baseHost}/embed?key=${widgetKey}" width="100%" height="480" style="border:none; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.05);" title="Free SEO Audit Widget"></iframe>`;
 
   const copyCode = () => {
     navigator.clipboard.writeText(embedCode);
@@ -25,7 +26,7 @@ export default function WidgetEmbedBuilder({ appUrl }: WidgetEmbedBuilderProps) 
 
   const simulateWidgetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url || !email) return;
+    if (!url || !email || !widgetKey) return;
 
     setIsCrawlLoading(true);
     setTestResult(null);
@@ -34,7 +35,7 @@ export default function WidgetEmbedBuilder({ appUrl }: WidgetEmbedBuilderProps) 
       const response = await fetch('/api/widget/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, email, name })
+        body: JSON.stringify({ url, email, name, widgetKey })
       });
       const data = await response.json();
       if (response.ok) {

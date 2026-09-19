@@ -8,12 +8,13 @@ function cleanText(html: string): string {
   return html.replace(/<[^>]*>/g, '').trim();
 }
 
-function parsePage(url: string, html: string, loadTimeMs: number): CrawlPageData {
+export function parsePage(url: string, html: string, loadTimeMs: number): CrawlPageData {
   const result: CrawlPageData = {
     url,
     loadTimeMs,
     pageSizeKb: Math.round((html.length / 1024) * 10) / 10,
     status: 200,
+    isSimulated: false,
     meta: {
       title: '',
       description: '',
@@ -200,7 +201,8 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
     timestamp: new Date().toISOString(),
     mainPage: null as any,
     additionalPages: [],
-    sitemapFound: false
+    sitemapFound: false,
+    hasSimulatedData: false
   };
 
   // Step 1: Query robots.txt & Find Sitemap
@@ -239,18 +241,19 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
     const loadTime = Date.now() - startTime;
 
     if (!targetResponse.ok) {
-      // Create a fallback crawl data based on a premium mock so users aren't met with fatal 418/etc screens if scanning a firewalled domain
+      // Target responded with a non-OK status (e.g. 403/404/500). We still don't have real page
+      // content to parse, so fall back to simulated data — flagged via isSimulated.
       result.mainPage = createMockPage(originUrl.toString(), targetResponse.status, loadTime);
     } else {
       const htmlText = await targetResponse.text();
       result.mainPage = parsePage(originUrl.toString(), htmlText, loadTime);
     }
   } catch (err: any) {
-    console.warn(`Direct fetch failed due to offline state or CORS/DNS firewall policy: ${err?.message}. Auto-remedying with dynamic analysis simulator.`);
-    
-    // We auto-generate highly realistic crawl report structures for demo/offline resilience as an absolute failsafe!
-    // Since this runs in a sandbox env where external URLs might sometimes time out, generating highly relevant metrics
-    // based on domain name guarantees a premium app experience with zero white screens!
+    console.warn(`Fetch failed for ${originUrl.toString()}: ${err?.message}. Falling back to simulated placeholder data — this scan will NOT reflect the real site.`);
+
+    // Fallback only: the target could not actually be reached (offline, DNS, CORS/firewall, timeout).
+    // This data is fabricated so the UI has something to render, but callers MUST check
+    // CrawlResult.hasSimulatedData / CrawlPageData.isSimulated before treating it as a real audit.
     const delay = Math.floor(Math.random() * 400 + 150);
     result.mainPage = createMockPage(originUrl.toString(), 200, delay);
   }
@@ -284,6 +287,9 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
     }
   }
 
+  result.hasSimulatedData = result.mainPage.isSimulated === true ||
+    result.additionalPages.some(p => p.isSimulated === true);
+
   return result;
 }
 
@@ -301,6 +307,7 @@ function createMockPage(urlString: string, status: number, loadTime: number): Cr
     loadTimeMs: loadTime,
     pageSizeKb: Math.floor(Math.random() * 80 + 25),
     status,
+    isSimulated: true,
     meta: {
       title: `${capitalizedName} | Leading Solutions & Professional Services`,
       description: `Welcome to ${capitalizedName}. We offer premium, elite software features, tailored business development, and dynamic SEO analysis with expert performance models built for 2026.`,

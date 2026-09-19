@@ -36,6 +36,7 @@ export async function generateSeoReport(crawl: CrawlResult): Promise<DeepSeekSeo
     mode: crawl.mode,
     depth: crawl.depth,
     sitemapFound: crawl.sitemapFound,
+    isSimulatedData: crawl.hasSimulatedData,
     mainPage: {
       url: crawl.mainPage.url,
       loadTimeMs: crawl.mainPage.loadTimeMs,
@@ -63,7 +64,9 @@ Represent your narrative in the voice of DeepSeek V4 Core SEO Intelligence - dem
 Website Scan Payload:
 ${cleanCrawlDataString}
 
-Produce a completely populated audit matching the requested JSON structure. Keep description text practical. Detail the exact corrective steps to boost visibility in Google, Bard, ChatGPT Search, Perplexity, and traditional search engines. Always calculate accurate performance scores based on the actual stats (e.g. low load times increase performance/aeo scores, missing alt tags reduce technical score).`;
+Produce a completely populated audit matching the requested JSON structure. Keep description text practical. Detail the exact corrective steps to boost visibility in Google, Bard, ChatGPT Search, Perplexity, and traditional search engines. Always calculate accurate performance scores based on the actual stats (e.g. low load times increase performance/aeo scores, missing alt tags reduce technical score).
+
+IMPORTANT: If "isSimulatedData" is true, the site could not actually be reached or crawled (offline, blocked, or timed out), and the payload above is placeholder data, NOT a real crawl of the site. In that case you MUST open the executiveSummary with a clear statement that live data could not be retrieved and these findings are illustrative only, not an actual audit of the target site.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -224,7 +227,7 @@ function generateSimulatorReport(crawl: CrawlResult): DeepSeekSeoReport {
       aeoGeo: aeoScore,
       performance: performanceScore
     },
-    executiveSummary: `The scan of ${host} exposes an overall SEO posture score of ${overallScore}/100. While the primary index structural configurations are operational, crawlability and modern artificial intelligence grounding (GEO) can be significantly improved. Introducing Schema.org structured models, resolving media alt tags, and compressing static assets will immediately amplify index ranking and generative engine visibility.`,
+    executiveSummary: `${crawl.hasSimulatedData ? `NOTE: ${host} could not be reached during this scan, so the data below is simulated placeholder content, not a real audit of the site. ` : ''}The scan of ${host} exposes an overall SEO posture score of ${overallScore}/100. While the primary index structural configurations are operational, crawlability and modern artificial intelligence grounding (GEO) can be significantly improved. Introducing Schema.org structured models, resolving media alt tags, and compressing static assets will immediately amplify index ranking and generative engine visibility.`,
     criticalIssues: criticalIssues.length > 0 ? criticalIssues : ['Sub-optimal content semantic nesting for voice searches.'],
     recommendedFixes: fixes,
     aeoAssessment: {

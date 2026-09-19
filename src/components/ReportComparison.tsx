@@ -19,25 +19,20 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
     new URL(s.url).hostname === currentHost
   );
 
-  // If there's an explicit previous report link in the current scan, and user hasn't selected anything, auto-default
+  // If nothing is explicitly selected to compare against, auto-default to the most recent
+  // eligible scan of the same domain.
   const eligibleCount = eligibleScans.length;
   const currentScanId = currentScan.id;
-  const prevReportId = currentScan.previousReportId;
   const selectedCompareScanId = selectedCompareScan?.id;
 
   React.useEffect(() => {
-    if (!selectedCompareScanId && prevReportId) {
-      const prev = historyScans.find(s => s.id === prevReportId);
-      if (prev) {
-        onSelectCompareScan(prev.id);
-      }
-    } else if (!selectedCompareScanId && eligibleCount > 0) {
+    if (!selectedCompareScanId && eligibleCount > 0) {
       onSelectCompareScan(eligibleScans[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentScanId, prevReportId, selectedCompareScanId, eligibleCount]);
+  }, [currentScanId, selectedCompareScanId, eligibleCount]);
 
-  if (eligibleScans.length === 0 && !currentScan.previousReportId) {
+  if (eligibleScans.length === 0) {
     return (
       <div className="glass-card rounded-2xl p-6 md:p-8 text-center shadow-lg">
         <Activity className="h-8 w-8 text-slate-400 mx-auto mb-2" />
@@ -49,7 +44,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
     );
   }
 
-  const baseScan = selectedCompareScan || historyScans.find(s => s.id === currentScan.previousReportId);
+  const baseScan = selectedCompareScan || eligibleScans[0];
   if (!baseScan || !baseScan.seoReport || !currentScan.seoReport) {
     return (
       <div className="glass-card rounded-2xl p-6 shadow-sm">
@@ -61,7 +56,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
   const scoreDiff = currentScan.seoReport.score.overall - baseScan.seoReport.score.overall;
   const techDiff = currentScan.seoReport.score.technical - baseScan.seoReport.score.technical;
   const aeoDiff = currentScan.seoReport.score.aeoGeo - baseScan.seoReport.score.aeoGeo;
-  const speedDiff = (currentScan.crawlResult?.mainPage?.loadTimeMs || 0) - (baseScan.crawlResult?.mainPage?.loadTimeMs || 0);
+  const speedDiff = (currentScan.crawlData?.mainPage?.loadTimeMs || 0) - (baseScan.crawlData?.mainPage?.loadTimeMs || 0);
 
   const formatDelta = (num: number, invert = false) => {
     if (num === 0) return <span className="text-xs text-slate-405 font-bold select-none">No Change</span>;
@@ -143,7 +138,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
         <div className="p-4 bg-white/5 rounded-xl border border-white/10 flex flex-col justify-between">
           <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Response Loading Time</span>
           <div className="flex items-baseline justify-between mt-2">
-            <span className="text-xl font-bold text-white">{currentScan.crawlResult?.mainPage?.loadTimeMs || 0}ms</span>
+            <span className="text-xl font-bold text-white">{currentScan.crawlData?.mainPage?.loadTimeMs || 0}ms</span>
             {formatDelta(speedDiff, true)}
           </div>
         </div>

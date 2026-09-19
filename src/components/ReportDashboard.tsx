@@ -47,9 +47,28 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
     ? Math.round((completedFixes.length / recommendedFixes.length) * 100) 
     : 0;
 
+  const hasSimulatedData = scan.crawlData?.hasSimulatedData === true;
+
   return (
     <div className="space-y-8 animate-fadeIn">
-      
+
+      {/* SIMULATED DATA WARNING — the target site could not actually be reached during this scan */}
+      {hasSimulatedData && (
+        <div className="bg-red-500/15 border-2 border-red-500/40 text-red-200 rounded-2xl p-5 flex items-start gap-3 shadow-lg">
+          <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-extrabold text-red-100 text-sm uppercase tracking-wide">
+              {isEs ? 'Datos Simulados — No es una Auditoría Real' : 'Simulated Data — Not a Real Audit'}
+            </h3>
+            <p className="text-xs text-red-200/90 mt-1 leading-relaxed">
+              {isEs
+                ? 'No se pudo acceder al sitio de destino durante este escaneo (fuera de línea, bloqueado, o tiempo de espera agotado). Los datos y puntuaciones mostrados a continuación son marcadores de posición ilustrativos, no un análisis real del sitio.'
+                : 'The target site could not be reached during this scan (offline, blocked, or timed out). The data and scores shown below are illustrative placeholders, not a real analysis of the site. Re-run the scan once the target is reachable.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* WHITE LABEL REPORT ACTIONS BAR */}
       <div className="glass-card rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-emerald-400 opacity-80" />
@@ -269,7 +288,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                 <Clock className="h-3.5 w-3.5 text-slate-400" />
                 Response Latency
               </span>
-              <span className="text-xs font-bold text-white">{scan.crawlResult?.mainPage?.loadTimeMs || 0} ms</span>
+              <span className="text-xs font-bold text-white">{scan.crawlData?.mainPage?.loadTimeMs || 0} ms</span>
             </div>
 
             <div className="flex items-center justify-between">
@@ -277,7 +296,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                 <Server className="h-3.5 w-3.5 text-slate-400" />
                 Document Size
               </span>
-              <span className="text-xs font-bold text-white">{scan.crawlResult?.mainPage?.pageSizeKb || 0} KB</span>
+              <span className="text-xs font-bold text-white">{scan.crawlData?.mainPage?.pageSizeKb || 0} KB</span>
             </div>
 
             <div className="flex items-center justify-between">
@@ -290,25 +309,25 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-300 font-semibold">Robots Index Rules</span>
-              <span className="text-xs font-bold text-slate-300">{scan.crawlResult?.mainPage?.meta?.robots || 'Not set'}</span>
+              <span className="text-xs font-bold text-slate-300">{scan.crawlData?.mainPage?.meta?.robots || 'Not set'}</span>
             </div>
 
             <div className="flex items-center justify-between border-t border-white/10 pt-3">
               <span className="text-xs text-slate-300 font-semibold">Structured JSON-LD</span>
               <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                scan.crawlResult?.mainPage?.structuredData.hasJsonLd ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-              }`}>{scan.crawlResult?.mainPage?.structuredData.hasJsonLd ? 'Discovered' : 'Missing'}</span>
+                scan.crawlData?.mainPage?.structuredData.hasJsonLd ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
+              }`}>{scan.crawlData?.mainPage?.structuredData.hasJsonLd ? 'Discovered' : 'Missing'}</span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-300 font-semibold">Web Sitemap (.xml)</span>
               <div className="text-right flex flex-col items-end gap-1">
                 <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                  scan.crawlResult?.sitemapFound ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                }`}>{scan.crawlResult?.sitemapFound ? 'Discovered' : 'Missing'}</span>
-                {scan.crawlResult?.sitemapFound && scan.crawlResult?.sitemapUrl && (
+                  scan.crawlData?.sitemapFound ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                }`}>{scan.crawlData?.sitemapFound ? 'Discovered' : 'Missing'}</span>
+                {scan.crawlData?.sitemapFound && scan.crawlData?.sitemapUrl && (
                   <a 
-                    href={scan.crawlResult.sitemapUrl} 
+                    href={scan.crawlData.sitemapUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-[9px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-0.5"
@@ -331,18 +350,18 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
               {/* Target root page */}
               <div className="bg-blue-500/5 rounded-xl p-3 border border-blue-500/20">
                 <div className="flex justify-between items-center text-xs font-bold text-white break-all">
-                  <span>🏠 {scan.crawlResult?.rootUrl || scan.url}</span>
+                  <span>🏠 {scan.crawlData?.rootUrl || scan.url}</span>
                   <span className="px-1.5 py-0.5 bg-blue-500 text-white rounded text-[9px]">Root Page</span>
                 </div>
                 <div className="flex gap-4 text-[10px] text-slate-400 font-semibold mt-1">
-                  <span>H1: {scan.crawlResult?.mainPage?.headings?.h1.length || 0} headings</span>
-                  <span>Images: {scan.crawlResult?.mainPage?.images?.total || 0} media assets</span>
+                  <span>H1: {scan.crawlData?.mainPage?.headings?.h1.length || 0} headings</span>
+                  <span>Images: {scan.crawlData?.mainPage?.images?.total || 0} media assets</span>
                 </div>
               </div>
 
               {/* Subpages recursively indexed list */}
-              {scan.crawlResult?.additionalPages && scan.crawlResult.additionalPages.length > 0 ? (
-                scan.crawlResult.additionalPages.map((sub, i) => (
+              {scan.crawlData?.additionalPages && scan.crawlData.additionalPages.length > 0 ? (
+                scan.crawlData.additionalPages.map((sub, i) => (
                   <div key={i} className="bg-white/5 rounded-xl p-3 border border-white/10 text-xs text-slate-250">
                     <div className="flex justify-between items-center font-bold text-slate-200 break-all">
                       <span>🔗 {sub.url}</span>
@@ -381,7 +400,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                 <p className="text-[10px] text-slate-400 mt-0.5">Dissect structure and keywords mapped in tags.</p>
               </div>
               <div className="text-slate-300 font-semibold text-xs flex items-center gap-1">
-                <span>Total Heading Tags ({scan.crawlResult?.mainPage?.headings?.h1?.length || 0} H1, {scan.crawlResult?.mainPage?.headings?.h2?.length || 0} H2)</span>
+                <span>Total Heading Tags ({scan.crawlData?.mainPage?.headings?.h1?.length || 0} H1, {scan.crawlData?.mainPage?.headings?.h2?.length || 0} H2)</span>
                 {expandedHeadings ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </div>
             </button>
@@ -391,19 +410,19 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-black/20 p-3.5 rounded-xl border border-white/10">
                     <span className="text-[10px] text-slate-455 uppercase font-black block mb-2">H1 Tags</span>
-                    {scan.crawlResult?.mainPage?.headings?.h1.map((tag, i) => (
+                    {scan.crawlData?.mainPage?.headings?.h1.map((tag, i) => (
                       <div key={i} className="text-xs text-slate-300 font-semibold mt-1 py-1.5 border-b border-white/5 last:border-b-0 break-all">{tag}</div>
                     )) || <span className="text-xs text-slate-400">None detected</span>}
                   </div>
                   <div className="bg-black/20 p-3.5 rounded-xl border border-white/10">
                     <span className="text-[10px] text-slate-455 uppercase font-black block mb-2">H2 Tags</span>
-                    {scan.crawlResult?.mainPage?.headings?.h2.slice(0, 8).map((tag, i) => (
+                    {scan.crawlData?.mainPage?.headings?.h2.slice(0, 8).map((tag, i) => (
                       <div key={i} className="text-xs text-slate-300 font-semibold mt-1 py-1.5 border-b border-white/5 last:border-b-0 break-all">{tag}</div>
                     )) || <span className="text-xs text-slate-400">None detected</span>}
                   </div>
                   <div className="bg-black/20 p-3.5 rounded-xl border border-white/10">
                     <span className="text-[10px] text-slate-455 uppercase font-black block mb-2">H3 Tags</span>
-                    {scan.crawlResult?.mainPage?.headings?.h3.slice(0, 8).map((tag, i) => (
+                    {scan.crawlData?.mainPage?.headings?.h3.slice(0, 8).map((tag, i) => (
                       <div key={i} className="text-xs text-slate-300 font-semibold mt-1 py-1.5 border-b border-white/5 last:border-b-0 break-all">{tag}</div>
                     )) || <span className="text-xs text-slate-400">None detected</span>}
                   </div>
@@ -426,14 +445,14 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                 <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Analyzing Alt descriptions (vital for Google Image Search rankings).</p>
               </div>
               <div className="text-slate-300 font-semibold text-xs flex items-center gap-1">
-                <span className="text-red-400 font-bold">{scan.crawlResult?.mainPage?.images?.missingAlt || 0} of {scan.crawlResult?.mainPage?.images?.total || 0} failing</span>
+                <span className="text-red-400 font-bold">{scan.crawlData?.mainPage?.images?.missingAlt || 0} of {scan.crawlData?.mainPage?.images?.total || 0} failing</span>
                 {expandedLinks ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </div>
             </button>
 
             {expandedLinks && (
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3.5 animate-fadeIn">
-                {scan.crawlResult?.mainPage?.images?.list.map((img, i) => (
+                {scan.crawlData?.mainPage?.images?.list.map((img, i) => (
                   <div key={i} className={`p-3.5 rounded-xl border flex gap-3 text-xs items-center ${
                     img.hasAlt ? 'bg-white/5 border-white/10 text-slate-300' : 'bg-red-500/10 border-red-500/20 text-red-300'
                   }`}>

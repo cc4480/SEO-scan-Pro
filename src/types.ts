@@ -6,6 +6,7 @@ export interface CrawlPageData {
   loadTimeMs: number;
   pageSizeKb: number;
   status: number;
+  isSimulated?: boolean;
   meta: {
     title: string;
     description: string;
@@ -45,6 +46,7 @@ export interface CrawlResult {
   additionalPages: CrawlPageData[];
   sitemapFound: boolean;
   sitemapUrl?: string;
+  hasSimulatedData: boolean;
 }
 
 export interface DeepSeekSeoReport {
@@ -93,13 +95,24 @@ export interface Scan {
   mode: ScanMode;
   depth: number;
   status: ScanStatus;
-  leadInfo?: {
-    email: string;
-    name?: string;
-    agencyId?: string;
-  };
-  crawlResult?: CrawlResult;
+  leadEmail?: string;
+  leadName?: string;
+  crawlData?: CrawlResult;
   seoReport?: DeepSeekSeoReport;
-  previousReportId?: string;
+  userId: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
 }
