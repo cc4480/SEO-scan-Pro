@@ -15,6 +15,7 @@ import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScan
 import { validateEnv } from './lib/env';
 import { sendPasswordResetEmail } from './lib/email';
 import { sendWebhook } from './lib/webhook';
+import { assertPublicUrl, SsrfBlockedError } from './lib/ssrfGuard';
 import { renderHtmlToPdf } from './lib/pdf';
 import { Scan, WhiteLabelSettings } from './src/types';
 
@@ -320,6 +321,23 @@ export function createApp() {
 
   // Update user settings
   app.post('/api/settings', authMiddleware, validateBody(settingsSchema), async (req: AuthRequest, res) => {
+    // Both URLs are fetched by this server later — the webhook on every lead,
+    // the logo when a PDF report is rendered — so both are refused up front if
+    // they point at a private address. (Each is re-checked when actually used:
+    // DNS can change after it is saved.)
+    for (const field of ['webhookUrl', 'logoUrl'] as const) {
+      const value = req.body[field];
+      if (typeof value === 'string' && value.trim()) {
+        try {
+          await assertPublicUrl(value.trim());
+        } catch (err) {
+          if (err instanceof SsrfBlockedError) {
+            return res.status(400).json({ error: `${field === 'webhookUrl' ? 'Webhook URL' : 'Logo URL'}: ${err.message}` });
+          }
+          throw err;
+        }
+      }
+    }
     try {
       const settings = await prisma.whiteLabelSettings.update({
         where: { userId: req.userId },
@@ -410,6 +428,16 @@ export function createApp() {
         return res.status(400).json({ error: 'URL is required' });
       }
 
+      // Refused before a scan record is created. This endpoint's URL is fetched
+      // by a real browser on this server; a private address would turn it into
+      // a proxy into the internal network.
+      try {
+        await assertPublicUrl(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) return res.status(400).json({ error: err.message });
+        throw err;
+      }
+
       const newScan = await prisma.scan.create({
         data: {
           url,
@@ -442,6 +470,16 @@ export function createApp() {
       const user = await prisma.user.findUnique({ where: { widgetKey } });
       if (!user) {
         return res.status(404).json({ error: 'Invalid widget key. This embed is not linked to an active account.' });
+      }
+
+      // Refused before a scan record is created. This endpoint's URL is fetched
+      // by a real browser on this server; a private address would turn it into
+      // a proxy into the internal network.
+      try {
+        await assertPublicUrl(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) return res.status(400).json({ error: err.message });
+        throw err;
       }
 
       const scan = await prisma.scan.create({
@@ -596,6 +634,35 @@ async function scanAsync(
 }
 
 // Report HTML generator
+// Everything interpolated into the report is escaped. Much of it is not ours:
+// scan.url is user input, and the executive summary is LLM output written after
+// reading the SCANNED site — a hostile site can steer that into markup. This
+// HTML is rendered by the server's own headless browser for PDF export, so
+// unescaped markup there is not only a broken report, it is a way to make the
+// server fetch things (lib/pdf.ts also blocks private addresses as a second layer).
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// primaryColor lands inside a style="" attribute, where escaping alone still
+// leaves CSS injection (url(...), expression breaking out of the declaration).
+// Only an actual colour value is allowed through.
+function safeColor(value: unknown, fallback = '#0ea5e9'): string {
+  const v = String(value ?? '').trim();
+  return /^#[0-9a-f]{3,8}$/i.test(v) || /^[a-z]{3,20}$/i.test(v) ? v : fallback;
+}
+
+// Scores arrive in LLM-generated JSON; nothing guarantees they are numbers.
+function safeScore(value: unknown): number {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+}
+
 function generateReportHtml(scan: any, settings: any): string {
   const isEs = settings?.language === 'es';
   const customTitle = isEs ? 'Auditoría SEO Profesional' : 'Professional SEO Audit';
@@ -605,7 +672,7 @@ function generateReportHtml(scan: any, settings: any): string {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>${customTitle} - ${scan.url}</title>
+  <title>${customTitle} - ${escapeHtml(scan.url)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -632,12 +699,12 @@ function generateReportHtml(scan: any, settings: any): string {
     ` : ''}
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-8 mb-8">
       <div>
-        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${settings?.primaryColor || '#0ea5e9'}">${settings?.agencyName || 'SEO Scan Pro'}</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${safeColor(settings?.primaryColor)}">${escapeHtml(settings?.agencyName || 'SEO Scan Pro')}</h1>
         <p class="text-slate-500 font-medium text-sm mt-1">${customTitle}</p>
       </div>
       <div class="mt-4 md:mt-0 text-left md:text-right">
         <p class="text-xs text-slate-400">Target URL</p>
-        <p class="font-bold text-lg text-slate-800 break-all">${scan.url}</p>
+        <p class="font-bold text-lg text-slate-800 break-all">${escapeHtml(scan.url)}</p>
         <p class="text-xs text-slate-400 mt-2">Audit Date</p>
         <p class="text-sm font-semibold text-slate-600">${new Date(scan.createdAt).toLocaleDateString()}</p>
       </div>
@@ -646,33 +713,33 @@ function generateReportHtml(scan: any, settings: any): string {
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
         <span class="text-xs text-slate-400 uppercase font-bold">Overall</span>
-        <div class="text-4xl font-extrabold mt-2" style="color: ${settings?.primaryColor || '#0ea5e9'}">${scan.seoReport?.score?.overall || 0}/100</div>
+        <div class="text-4xl font-extrabold mt-2" style="color: ${safeColor(settings?.primaryColor)}">${safeScore(scan.seoReport?.score?.overall)}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
         <span class="text-xs text-slate-400 uppercase font-bold">Technical</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.technical || 0}/100</div>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${safeScore(scan.seoReport?.score?.technical)}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
         <span class="text-xs text-slate-400 uppercase font-bold">Content</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.content || 0}/100</div>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${safeScore(scan.seoReport?.score?.content)}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
         <span class="text-xs text-slate-400 uppercase font-bold">AEO & AI</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.aeoGeo || 0}/100</div>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${safeScore(scan.seoReport?.score?.aeoGeo)}/100</div>
       </div>
       <div class="bg-slate-50 p-4 rounded-xl text-center border border-slate-100 shadow-sm">
         <span class="text-xs text-slate-400 uppercase font-bold">Performance</span>
-        <div class="text-2xl font-bold mt-2 text-slate-700">${scan.seoReport?.score?.performance || 0}/100</div>
+        <div class="text-2xl font-bold mt-2 text-slate-700">${safeScore(scan.seoReport?.score?.performance)}/100</div>
       </div>
     </div>
 
     <div class="mb-8 p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-100">
-      <h2 class="text-xl font-bold mb-3" style="color: ${settings?.primaryColor || '#0ea5e9'}">Executive Summary</h2>
-      <p class="text-slate-600 leading-relaxed text-sm">${scan.seoReport?.executiveSummary || 'N/A'}</p>
+      <h2 class="text-xl font-bold mb-3" style="color: ${safeColor(settings?.primaryColor)}">Executive Summary</h2>
+      <p class="text-slate-600 leading-relaxed text-sm">${escapeHtml(scan.seoReport?.executiveSummary || 'N/A')}</p>
     </div>
 
     <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-      <p>${settings?.customFooter || 'Report provided by SEO Scan Pro'}</p>
+      <p>${escapeHtml(settings?.customFooter || 'Report provided by SEO Scan Pro')}</p>
       <button class="no-print mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm shadow inline-block transition cursor-pointer" onclick="window.print()">
         Print Report / Save to PDF
       </button>

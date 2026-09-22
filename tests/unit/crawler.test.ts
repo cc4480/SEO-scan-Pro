@@ -142,11 +142,20 @@ describe('crawlUrl fallback behavior', () => {
     await closeBrowser();
   });
 
-  it('flags hasSimulatedData=true when the target cannot be resolved (DNS failure)', async () => {
-    const result = await crawlUrl('https://this-domain-definitely-does-not-exist-abc123xyz.test', 'SINGLE', 1);
-    expect(result.hasSimulatedData).toBe(true);
-    expect(result.mainPage.isSimulated).toBe(true);
+  // Changed with the SSRF guard: a host that does not resolve is refused, not
+  // turned into a fabricated "simulated" report. There is no site there to
+  // audit, and a scored report for one is exactly the kind of false result the
+  // simulated-data banner can only apologise for.
+  it('refuses a target that cannot be resolved rather than fabricating a report', async () => {
+    await expect(crawlUrl('https://this-domain-definitely-does-not-exist-abc123xyz.test', 'SINGLE', 1))
+      .rejects.toThrow(/Could not resolve/);
   }, 20000);
+
+  it('refuses private and metadata targets before any request is made', async () => {
+    for (const target of ['http://127.0.0.1:3000/', 'http://169.254.169.254/latest/meta-data/', 'http://10.0.0.1/', 'localhost:5432']) {
+      await expect(crawlUrl(target, 'SINGLE', 1), target).rejects.toThrow();
+    }
+  });
 
   it('flags hasSimulatedData=true when the target responds with a non-OK status', async () => {
     const result = await crawlUrl('https://example.com/this-path-does-not-exist-12345', 'SINGLE', 1);

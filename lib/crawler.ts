@@ -1,5 +1,6 @@
 import { CrawlPageData, CrawlResult, ScanMode } from '../src/types';
 import { getBrowser } from './browser';
+import { assertPublicUrl, browserRequestAllowed, isBlockedAddress, safeFetch, SsrfBlockedError } from './ssrfGuard';
 
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1';
 
@@ -20,7 +21,39 @@ async function renderPage(url: string, timeoutMs: number): Promise<RenderedPage>
   const startTime = Date.now();
   try {
     await page.setUserAgent(CRAWLER_USER_AGENT);
-    const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+
+    // Every request the page makes is checked — the navigation, each redirect
+    // hop, and every subresource or fetch()/XHR the target's own JavaScript
+    // issues. Without this, a scanned page could simply script a request to
+    // http://169.254.169.254/ and have this server's browser make it.
+    let blockedNavigation: string | null = null;
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (req.isInterceptResolutionHandled()) return;
+      void browserRequestAllowed(req.url()).then((allowed) => {
+        if (allowed) return req.continue();
+        if (req.isNavigationRequest() && req.frame() === page.mainFrame()) blockedNavigation = req.url();
+        return req.abort('blockedbyclient');
+      }).catch(() => req.abort('blockedbyclient').catch(() => {}));
+    });
+
+    let response;
+    try {
+      response = await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    } catch (err) {
+      if (blockedNavigation) throw new SsrfBlockedError(`Navigation to a private or reserved address was blocked (${blockedNavigation}).`);
+      throw err;
+    }
+    if (blockedNavigation) throw new SsrfBlockedError(`Navigation to a private or reserved address was blocked (${blockedNavigation}).`);
+
+    // Closes the DNS-rebinding gap the interception check cannot: Chromium
+    // resolves hosts itself, so a name can pass the check and then resolve
+    // privately for the real connection. remoteAddress() is the IP Chromium
+    // actually connected to. Refuse the content if it is private.
+    const remoteIp = response?.remoteAddress()?.ip;
+    if (remoteIp && isBlockedAddress(remoteIp.replace(/^\[|\]$/g, ''))) {
+      throw new SsrfBlockedError('The page was served from a private or reserved address.');
+    }
     const loadTimeMs = Date.now() - startTime;
     const html = await page.content();
     return {
@@ -220,13 +253,12 @@ export function parsePage(url: string, html: string, loadTimeMs: number): CrawlP
 }
 
 export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number): Promise<CrawlResult> {
-  const formattedUrl = targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`;
-  let originUrl: URL;
-  try {
-    originUrl = new URL(formattedUrl);
-  } catch (err) {
-    throw new Error(`Invalid URL parsed: ${targetUrl}`);
-  }
+  const formattedUrl = /^https?:\/\//i.test(targetUrl) ? targetUrl : `https://${targetUrl}`;
+  // Refused outright — never a "simulated" report. An internal address is not
+  // an unreachable site to paper over with placeholder data; it is a request
+  // this server must not make. Throws SsrfBlockedError, which the routes turn
+  // into a 400.
+  const originUrl = await assertPublicUrl(formattedUrl);
 
   const result: CrawlResult = {
     rootUrl: originUrl.toString(),
@@ -242,9 +274,9 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
   // Step 1: Query robots.txt & Find Sitemap
   let sitemapLoc = `${originUrl.origin}/sitemap.xml`;
   try {
-    const robotsRes = await fetch(`${originUrl.origin}/robots.txt`, { signal: AbortSignal.timeout(4000) });
+    const robotsRes = await safeFetch(`${originUrl.origin}/robots.txt`, { timeoutMs: 4000, maxBytes: 512 * 1024 });
     if (robotsRes.ok) {
-      const text = await robotsRes.text();
+      const text = robotsRes.text;
       const sitemapLine = text.split('\n').find(line => line.toLowerCase().startsWith('sitemap:'));
       if (sitemapLine) {
         sitemapLoc = sitemapLine.split(/sitemap:/i)[1].trim();
@@ -256,7 +288,11 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
 
   // Double check sitemap presence
   try {
-    const sitemapRes = await fetch(sitemapLoc, { signal: AbortSignal.timeout(3000) });
+    // The sitemap location comes from the TARGET's robots.txt, so it is
+    // attacker-controlled: "Sitemap: http://10.0.0.5:6379/" would otherwise
+    // have this server probe an internal port and report back whether it
+    // answered (sitemapFound). safeFetch refuses private destinations.
+    const sitemapRes = await safeFetch(sitemapLoc, { timeoutMs: 3000, maxBytes: 5 * 1024 * 1024 });
     if (sitemapRes.ok) {
       result.sitemapFound = true;
       result.sitemapUrl = sitemapLoc;
@@ -277,6 +313,9 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
       result.mainPage = parsePage(originUrl.toString(), rendered.html, rendered.loadTimeMs);
     }
   } catch (err: any) {
+    // A redirect or rebinding into a private address surfaces here. Propagate
+    // it: dressing it up as a simulated report would hide the attempt.
+    if (err instanceof SsrfBlockedError) throw err;
     console.warn(`Render failed for ${originUrl.toString()}: ${err?.message}. Falling back to simulated placeholder data — this scan will NOT reflect the real site.`);
 
     // Fallback only: the target could not actually be reached (offline, DNS, CORS/firewall, timeout).
@@ -303,7 +342,10 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number)
         } else {
           result.additionalPages.push(createMockPage(linkUrl, rendered.status, rendered.loadTimeMs));
         }
-      } catch {
+      } catch (err) {
+        // A subpage link into a private address is skipped, not faked — the
+        // target's HTML chooses these links, so this is expected hostile input.
+        if (err instanceof SsrfBlockedError) continue;
         result.additionalPages.push(createMockPage(linkUrl, 200, Math.floor(Math.random() * 200 + 100)));
       }
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeEach, afterEach } from 'vitest';
 import http from 'http';
 import crypto from 'crypto';
 import request from 'supertest';
@@ -45,6 +45,33 @@ function startReceiver(): Promise<{ url: string; getRequests: () => any[]; close
 }
 
 describe('Webhook delivery on widget lead capture', () => {
+  // The receiver below listens on 127.0.0.1, which the SSRF guard blocks. This
+  // opens loopback (only) for this file; see lib/ssrfGuard.ts. The last test
+  // turns it back off to prove the block itself.
+  beforeEach(() => { process.env.SSRF_ALLOW_LOOPBACK = 'true'; });
+  afterEach(() => { delete process.env.SSRF_ALLOW_LOOPBACK; });
+
+  it('refuses to save, or deliver to, a webhook on a private address', async () => {
+    delete process.env.SSRF_ALLOW_LOOPBACK;
+    const reg = await request(app).post('/api/auth/register').send({ email: testEmail('ssrf'), password: 'password123' });
+    const token = reg.body.token;
+
+    for (const webhookUrl of ['http://127.0.0.1:6379/', 'http://169.254.169.254/latest/meta-data/', 'http://[::1]/', 'http://localhost:5432/']) {
+      const res = await request(app).post('/api/settings').set('Authorization', `Bearer ${token}`).send({ webhookUrl });
+      expect(res.status, webhookUrl).toBe(400);
+    }
+
+    // And at SEND time too — a URL saved while public can be repointed later.
+    const receiver = await startReceiver();
+    try {
+      const { sendWebhook } = await import('../../lib/webhook');
+      await sendWebhook(receiver.url, 'secret', { event: 'test' });
+      expect(receiver.getRequests().length).toBe(0);
+    } finally {
+      await receiver.close();
+    }
+  });
+
   it('fires a correctly signed webhook to the configured URL when a widget scan completes', async () => {
     const receiver = await startReceiver();
     const email = testEmail('delivery');
