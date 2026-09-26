@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Code, Share2, Copy, Check, Sparkles, Mail, Send, Award } from 'lucide-react';
+import { waitForWidgetScan } from '../widgetScan';
+import { copyText } from '../clipboard';
 
 interface WidgetEmbedBuilderProps {
   appUrl: string;
@@ -13,13 +15,18 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
   const [name, setName] = useState('');
   const [testResult, setTestResult] = useState<any | null>(null);
   const [isCrawlLoading, setIsCrawlLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
 
   // Fallback to current window host if appUrl is undefined/blank
   const baseHost = appUrl || window.location.origin;
   const embedCode = `<iframe src="${baseHost}/embed?key=${widgetKey}" width="100%" height="480" style="border:none; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.05);" title="Free SEO Audit Widget"></iframe>`;
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(embedCode);
+  const copyCode = async () => {
+    const ok = await copyText(embedCode);
+    if (!ok) {
+      alert('Copying was blocked by the browser. Select the code and copy it manually.');
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -30,6 +37,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
 
     setIsCrawlLoading(true);
     setTestResult(null);
+    setStatusMessage('Scanning target site...');
 
     try {
       const response = await fetch('/api/widget/scan', {
@@ -38,15 +46,27 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
         body: JSON.stringify({ url, email, name, widgetKey })
       });
       const data = await response.json();
-      if (response.ok) {
-        setTestResult(data);
-      } else {
+
+      if (!response.ok) {
         alert(data.error || 'Widget processing halted temporarily.');
+        return;
       }
+
+      // The scan is queued asynchronously, so wait for the report before showing the result —
+      // otherwise the score/summary render as "undefined" and the PDF link 404s.
+      const finished = await waitForWidgetScan(data.scanId, setStatusMessage);
+
+      if (!finished || finished.status !== 'COMPLETED') {
+        alert('The audit is still running on the server. Please try again in a moment.');
+        return;
+      }
+
+      setTestResult({ ...data, ...finished });
     } catch {
       alert('Network timeout running widget audit.');
     } finally {
       setIsCrawlLoading(false);
+      setStatusMessage('');
     }
   };
 
@@ -154,11 +174,24 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
 
                 <button
                   type="submit"
-                  disabled={isCrawlLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-500 font-bold text-xs py-3 rounded-lg text-white shadow-md active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2"
+                  disabled={isCrawlLoading || !widgetKey}
+                  className="w-full bg-blue-600 hover:bg-blue-500 font-bold text-xs py-3 rounded-lg text-white shadow-md active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isCrawlLoading ? 'Analyzing code...' : 'Instant Complete Analysis'}
                 </button>
+
+                {!widgetKey && (
+                  <p className="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    This preview needs your account&apos;s widget key, which has not loaded yet. Reload the page and try again.
+                  </p>
+                )}
+
+                {isCrawlLoading && statusMessage && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[10px] px-3 py-2 rounded-lg flex items-center gap-2 animate-pulse font-mono">
+                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full shrink-0" />
+                    <span>{statusMessage}</span>
+                  </div>
+                )}
               </form>
             ) : (
               <div className="space-y-5 text-center animate-fadeIn">

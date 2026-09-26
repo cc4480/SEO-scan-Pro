@@ -181,9 +181,10 @@ describe('DELETE /api/auth/account', () => {
     const scansGone = await prisma.scan.findMany({ where: { userId } });
     expect(scansGone).toEqual([]);
 
-    // The token should no longer grant access to anything (user row is gone)
+    // The token should no longer grant access to anything (user row is gone). Auth now checks
+    // the user's tokenVersion, so a deleted account's token is rejected outright (401), not 404.
     const meAfter = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
-    expect(meAfter.status).toBe(404);
+    expect(meAfter.status).toBe(401);
   });
 
   it('rejects an incorrect password and does not delete the account', async () => {

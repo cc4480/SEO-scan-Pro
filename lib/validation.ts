@@ -70,6 +70,35 @@ export const settingsSchema = z.object({
   enableEmailAlerts: z.boolean().optional()
 });
 
+export const apiKeyCreateSchema = z.object({
+  name: z.string().trim().min(1, 'Give the key a name').max(80)
+});
+
+export const monitorCreateSchema = z.object({
+  url: z.string().trim().min(1, 'URL is required').max(2048),
+  frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
+  alertDrop: z.coerce.number().int().min(1).max(100).optional()
+});
+
+export const monitorUpdateSchema = z.object({
+  active: z.boolean().optional(),
+  frequency: z.enum(['DAILY', 'WEEKLY']).optional(),
+  alertDrop: z.coerce.number().int().min(1).max(100).optional()
+});
+
+// Query string for GET /api/scans and /api/scans/export. Unknown keys are ignored.
+export const scanListQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  status: z.enum(['PENDING', 'COMPLETED', 'FAILED']).optional(),
+  mode: z.enum(['SINGLE', 'FULL_SITE']).optional(),
+  leads: z.enum(['true', 'false']).optional(),
+  monitorId: z.string().trim().max(64).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional()
+});
+
 export function validateBody(schema: z.ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);

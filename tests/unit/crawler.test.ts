@@ -134,6 +134,72 @@ describe('parsePage', () => {
   });
 });
 
+// Regression coverage for the structured-data extraction bug. Reading only a top-level "@type"
+// reported ZERO types for a page that declared sixteen of them, and the AI then turned that into
+// confident "your structured data is functionally dead" / "no FAQPage or Organization schema
+// anywhere" findings. @graph is the shape Next.js, Yoast and Rank Math all emit.
+describe('parsePage — JSON-LD structured data', () => {
+  const ld = (json: unknown) =>
+    parsePage('https://example.com', `<script type="application/ld+json">${JSON.stringify(json)}</script>`, 100);
+
+  it('extracts types from a top-level @type', () => {
+    expect(ld({ '@type': 'Organization' }).structuredData.types).toEqual(['Organization']);
+  });
+
+  it('extracts types from an @graph wrapper', () => {
+    const result = ld({
+      '@context': 'https://schema.org',
+      '@graph': [{ '@type': 'Organization', name: 'Acme' }, { '@type': 'WebSite' }, { '@type': 'FAQPage' }]
+    });
+    expect(result.structuredData.hasJsonLd).toBe(true);
+    expect(result.structuredData.types).toEqual(['Organization', 'WebSite', 'FAQPage']);
+  });
+
+  it('expands an array-valued @type', () => {
+    // Previously dropped entirely, because the array failed a `typeof === 'string'` check.
+    expect(ld({ '@type': ['Organization', 'WebSite'] }).structuredData.types).toEqual(['Organization', 'WebSite']);
+  });
+
+  it('finds types nested inside properties and arrays', () => {
+    const result = ld({
+      '@type': 'WebPage',
+      mainEntity: { '@type': 'Question', acceptedAnswer: { '@type': 'Answer' } },
+      itemListElement: [{ '@type': 'ListItem' }, { '@type': 'ListItem' }]
+    });
+    expect(result.structuredData.types).toEqual(['WebPage', 'Question', 'Answer', 'ListItem']);
+  });
+
+  it('de-duplicates repeated types', () => {
+    expect(ld({ '@graph': [{ '@type': 'Organization' }, { '@type': 'Organization' }] }).structuredData.types).toEqual([
+      'Organization'
+    ]);
+  });
+
+  it('reports no types without JSON-LD, and survives malformed JSON-LD', () => {
+    expect(parsePage('https://example.com', '<html></html>', 100).structuredData.types).toEqual([]);
+    expect(
+      parsePage('https://example.com', '<script type="application/ld+json">{ not valid json </script>', 100)
+        .structuredData.types
+    ).toEqual([]);
+  });
+});
+
+describe('parsePage — text extraction', () => {
+  it('decodes HTML entities so findings are not made against mangled text', () => {
+    const result = parsePage(
+      'https://example.com',
+      '<h1>R&amp;D &mdash; Tools</h1><h2>Auth &amp; Session</h2>',
+      100
+    );
+    expect(result.headings.h1[0]).toBe('R&D — Tools');
+    expect(result.headings.h2[0]).toBe('Auth & Session');
+  });
+
+  it('collapses whitespace inside headings', () => {
+    expect(parsePage('https://example.com', '<h1>  Spaced   Out  </h1>', 100).headings.h1[0]).toBe('Spaced Out');
+  });
+});
+
 // The main page is now rendered through a real (headless) browser rather than a plain
 // fetch, so these exercise real network conditions instead of stubbing global.fetch —
 // consistent with how the integration suite already depends on real access to example.com.

@@ -9,14 +9,26 @@ interface ReportComparisonProps {
   selectedCompareScan?: Scan;
 }
 
+// `scan.url` is stored exactly as the user typed it and is not normalised server-side, so a
+// scheme-less value like "example.com" is a perfectly legal row. `new URL()` throws on those,
+// which used to crash this component during render and blank the entire page.
+function hostOf(value: string | undefined): string {
+  if (!value) return '';
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return value.replace(/^https?:\/\//i, '').split('/')[0].toLowerCase();
+  }
+}
+
 export default function ReportComparison({ currentScan, historyScans, onSelectCompareScan, selectedCompareScan }: ReportComparisonProps) {
   // Filter other scans of the same domain name to offer choices to compare
-  const currentHost = new URL(currentScan.url).hostname;
-  
-  const eligibleScans = historyScans.filter(s => 
-    s.id !== currentScan.id && 
+  const currentHost = hostOf(currentScan.url);
+
+  const eligibleScans = historyScans.filter(s =>
+    s.id !== currentScan.id &&
     s.status === 'COMPLETED' &&
-    new URL(s.url).hostname === currentHost
+    hostOf(s.url) === currentHost
   );
 
   // If nothing is explicitly selected to compare against, auto-default to the most recent
@@ -44,7 +56,10 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
     );
   }
 
-  const baseScan = selectedCompareScan || eligibleScans[0];
+  // Re-validate the explicit selection against the eligible set: it may belong to a different
+  // domain (the user switched active scans) or be the current scan itself, which would silently
+  // compare two unrelated sites or yield all-zero deltas.
+  const baseScan = eligibleScans.find(s => s.id === selectedCompareScan?.id) || eligibleScans[0];
   if (!baseScan || !baseScan.seoReport || !currentScan.seoReport) {
     return (
       <div className="glass-card rounded-2xl p-6 shadow-sm">
@@ -53,9 +68,14 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
     );
   }
 
-  const scoreDiff = currentScan.seoReport.score.overall - baseScan.seoReport.score.overall;
-  const techDiff = currentScan.seoReport.score.technical - baseScan.seoReport.score.technical;
-  const aeoDiff = currentScan.seoReport.score.aeoGeo - baseScan.seoReport.score.aeoGeo;
+  // Scores are unvalidated LLM output — fill in any missing field rather than throwing.
+  const zeroScore = { overall: 0, technical: 0, content: 0, aeoGeo: 0, performance: 0 };
+  const currentScore = { ...zeroScore, ...(currentScan.seoReport.score || {}) };
+  const baseScore = { ...zeroScore, ...(baseScan.seoReport.score || {}) };
+
+  const scoreDiff = currentScore.overall - baseScore.overall;
+  const techDiff = currentScore.technical - baseScore.technical;
+  const aeoDiff = currentScore.aeoGeo - baseScore.aeoGeo;
   const speedDiff = (currentScan.crawlData?.mainPage?.loadTimeMs || 0) - (baseScan.crawlData?.mainPage?.loadTimeMs || 0);
 
   const formatDelta = (num: number, invert = false) => {

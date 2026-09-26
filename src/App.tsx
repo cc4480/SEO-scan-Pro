@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Scan, WhiteLabelSettings } from './types';
+import { Scan, WhiteLabelSettings, ProgressEvent } from './types';
 import ScanForm from './components/ScanForm';
 import ReportDashboard from './components/ReportDashboard';
 import ReportComparison from './components/ReportComparison';
@@ -7,14 +7,18 @@ import WhiteLabelEditor from './components/WhiteLabelEditor';
 import WidgetEmbedBuilder from './components/WidgetEmbedBuilder';
 import EmbedView from './components/EmbedView';
 import CompetitorBenchmark from './components/CompetitorBenchmark';
+import ErrorBoundary from './components/ErrorBoundary';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
 import ForgotPasswordForm from './components/Auth/ForgotPasswordForm';
 import ResetPasswordForm from './components/Auth/ResetPasswordForm';
 import AccountSettings from './components/AccountSettings';
+import MonitorsPanel from './components/MonitorsPanel';
+import LeadsPanel from './components/LeadsPanel';
+import { downloadWithAuth } from './download';
 import {
   Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
-  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog
+  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog, Activity, Users, Download, Search
 } from 'lucide-react';
 
 export default function App() {
@@ -25,21 +29,43 @@ export default function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string } | null>(null);
 
-  if (isEmbedPage) {
-    return <EmbedView />;
-  }
+  // ---- Hooks -----------------------------------------------------------------------
+  // EVERY hook must run on every render, before any early return below. Eight useState
+  // calls and the loadDatabase effect previously sat *after* the auth guards, so an
+  // already-authenticated visit called far more hooks than the login render had —
+  // React error #310 ("rendered more hooks than during the previous render") — which
+  // blanked the page for anyone with a token in localStorage instead of showing the
+  // dashboard. Keep all hooks above the early returns.
+  const [scans, setScans] = useState<Scan[]>([]);
+  const [settings, setSettings] = useState<WhiteLabelSettings>({
+    agencyName: 'SEO Scan Elite',
+    primaryColor: '#0ea5e9',
+    accentColor: '#1e40af',
+    customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
+    enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
+    language: 'en'
+  });
+  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'monitoring' | 'leads' | 'settings' | 'widget' | 'benchmark' | 'account'>('audit');
+  const [activeScan, setActiveScan] = useState<Scan | null>(null);
+  const [selectedCompareScan, setSelectedCompareScan] = useState<Scan | undefined>(undefined);
+  const [isCrawlLoading, setIsCrawlLoading] = useState(false);
+  // Real log lines streamed from the server while a scan runs (see /api/scans/:id/events).
+  const [auditEvents, setAuditEvents] = useState<ProgressEvent[]>([]);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  // History list filters. `historyQuery` is the debounced value actually sent to the server.
+  const [searchText, setSearchText] = useState('');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'' | 'COMPLETED' | 'PENDING' | 'FAILED'>('');
+  const [leadsOnly, setLeadsOnly] = useState(false);
 
-  // A password-reset link lands on the root path with ?resetToken=... — jump straight
-  // into the reset form rather than showing the normal login screen.
-  useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get('resetToken');
-    if (token) {
-      setResetToken(token);
-      setAuthMode('reset');
-      // Clean the token out of the visible URL/history without a full navigation.
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` })
+    };
+  };
 
   // Loads /api/auth/me (incl. widgetKey) using whatever token is in localStorage
   const loadCurrentUser = async (): Promise<boolean> => {
@@ -62,12 +88,88 @@ export default function App() {
     }
   };
 
+  // Load Database stats on bootstrap
+  const buildScanFilterQuery = () => {
+    const params = new URLSearchParams();
+    if (historyQuery) params.set('q', historyQuery);
+    if (statusFilter) params.set('status', statusFilter);
+    if (leadsOnly) params.set('leads', 'true');
+    return params.toString();
+  };
+
+  const loadDatabase = async () => {
+    try {
+      const filterQuery = buildScanFilterQuery();
+      const scansRes = await fetch(`/api/scans${filterQuery ? `?${filterQuery}` : ''}`, {
+        headers: getAuthHeaders()
+      });
+      if (scansRes.ok) {
+        const scansData = await scansRes.json();
+        setScans(scansData);
+        if (scansData.length > 0) {
+          // Default pre-open the latest completed scan. The updater form avoids closing over a
+          // stale `activeScan` (this function is recreated per render), which previously left the
+          // right-hand pane empty after the active scan was deleted.
+          const completed = scansData.find((s: Scan) => s.status === 'COMPLETED');
+          if (completed) setActiveScan(prev => prev ?? completed);
+        }
+      }
+
+      const settingsRes = await fetch('/api/settings', {
+        headers: getAuthHeaders()
+      });
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        setSettings(settingsData);
+      }
+    } catch (err) {
+      console.error('Failed querying backend express endpoints', err);
+    }
+  };
+
+  // A password-reset link lands on the root path with ?resetToken=... — jump straight
+  // into the reset form rather than showing the normal login screen.
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('resetToken');
+    if (token) {
+      setResetToken(token);
+      setAuthMode('reset');
+      // Clean the token out of the visible URL/history without a full navigation.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // Check authentication on mount
   useEffect(() => {
     loadCurrentUser()
       .then(ok => setIsAuthenticated(ok))
       .finally(() => setIsCheckingAuth(false));
   }, []);
+
+  // Debounce the search box so a request is not sent per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setHistoryQuery(searchText.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
+  // Fetch scan history + branding once the user is signed in, and refetch when a filter changes.
+  useEffect(() => {
+    if (isAuthenticated) loadDatabase();
+  }, [isAuthenticated, historyQuery, statusFilter, leadsOnly]);
+
+  // Bring the report into view whenever one is rendered. A scan takes ~30s, by which point the
+  // user has usually scrolled down to the launch button or the history list — so the audit they
+  // just waited for would render above the fold, off-screen. Also covers opening a different
+  // scan from the history list.
+  useEffect(() => {
+    if (!activeScan) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeScan?.id]);
+
+  // ---- Early returns: safe now that every hook above runs on every render. ----
+  if (isEmbedPage) {
+    return <EmbedView />;
+  }
 
   // Show loading state while checking auth
   if (isCheckingAuth) {
@@ -115,86 +217,43 @@ export default function App() {
     );
   }
 
-  const [scans, setScans] = useState<Scan[]>([]);
-  const [settings, setSettings] = useState<WhiteLabelSettings>({
-    agencyName: 'SEO Scan Elite',
-    primaryColor: '#0ea5e9',
-    accentColor: '#1e40af',
-    customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
-    enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
-    language: 'en'
-  });
-
-  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'settings' | 'widget' | 'benchmark' | 'account'>('audit');
-  const [activeScan, setActiveScan] = useState<Scan | null>(null);
-  const [selectedCompareScan, setSelectedCompareScan] = useState<Scan | undefined>(undefined);
-  const [isCrawlLoading, setIsCrawlLoading] = useState(false);
-  const [apiStatusMsg, setApiStatusMsg] = useState('');
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
-
-  // Helper function to get auth headers
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` })
-    };
-  };
-
-  // Load Database stats on bootstrap
-  const loadDatabase = async () => {
-    try {
-      const scansRes = await fetch('/api/scans', {
-        headers: getAuthHeaders()
-      });
-      if (scansRes.ok) {
-        const scansData = await scansRes.json();
-        setScans(scansData);
-        if (scansData.length > 0 && !activeScan) {
-          // Default pre-open latest compiled scan
-          const completed = scansData.find((s: Scan) => s.status === 'COMPLETED');
-          if (completed) setActiveScan(completed);
+  // Polls until the audit actually finishes. POST /api/scan answers 202 immediately and the
+  // crawl + DeepSeek analysis then run asynchronously on the server, so without this the UI
+  // showed a PENDING scan forever and the audit looked like it had silently failed.
+  const waitForScan = async (scanId: string, timeoutMs = 300000): Promise<Scan | null> => {
+    const deadline = Date.now() + timeoutMs;
+    let seen = 0;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 700));
+      try {
+        // The events endpoint returns each new log line once (?after=<lines already shown>) and
+        // the scan's status, so one cheap request drives both the live log and completion.
+        const res = await fetch(`/api/scans/${scanId}/events?after=${seen}`, { headers: getAuthHeaders() });
+        // Logged out, or the scan was deleted while we were waiting: stop polling rather than
+        // hammering a 401 for five minutes and then alerting over the login screen.
+        if (res.status === 401 || res.status === 403 || res.status === 404) return null;
+        if (!res.ok) continue;
+        const data: { status: string; events: ProgressEvent[]; next: number } = await res.json();
+        if (data.events.length > 0) {
+          seen = data.next;
+          setAuditEvents(prev => [...prev, ...data.events]);
         }
+        if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+          const full = await fetch(`/api/scans/${scanId}`, { headers: getAuthHeaders() });
+          if (full.ok) return (await full.json()) as Scan;
+        }
+      } catch {
+        // Transient blip — keep polling until the deadline.
       }
-
-      const settingsRes = await fetch('/api/settings', {
-        headers: getAuthHeaders()
-      });
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        setSettings(settingsData);
-      }
-    } catch (err) {
-      console.error('Failed querying backend express endpoints', err);
     }
+    return null;
   };
-
-  useEffect(() => {
-    loadDatabase();
-  }, []);
 
   // Run dynamic scanning triggers
-  const executeScan = async (payload: { url: string; mode: any; depth: number; leadInfo?: any }) => {
+  const executeScan = async (payload: { url: string; mode: any; depth: number; leadEmail?: string; leadName?: string }) => {
     setIsCrawlLoading(true);
-    setApiStatusMsg('Pinging destination host connectivity...');
-
-    // Progress ticker array to entertain visitors during live analysis
-    const statusTicks = [
-      'Scanning robots.txt guidelines & sitemap hierarchies...',
-      'Crawling internal layout anchor paths...',
-      'Reviewing heading tag hierarchies & text sizes...',
-      'Auditing visual media alternative attributes...',
-      'Deploying semantic layout parsers...',
-      'Summoning deep AI SEO optimizing models...'
-    ];
-
-    let tickerIdx = 0;
-    const interval = setInterval(() => {
-      if (tickerIdx < statusTicks.length) {
-        setApiStatusMsg(statusTicks[tickerIdx]);
-        tickerIdx++;
-      }
-    }, 1800);
+    // The live log is fed by real events from the scanner (waitForScan below), not a timer.
+    setAuditEvents([]);
 
     try {
       const response = await fetch('/api/scan', {
@@ -202,24 +261,37 @@ export default function App() {
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
       });
-      clearInterval(interval);
 
       if (!response.ok) {
-        const errData = await response.json();
+        const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || 'Pipeline calculation failure');
       }
 
-      const completedScan = await response.json();
-      setActiveScan(completedScan);
+      // This is the freshly queued scan (status PENDING), not a finished result.
+      const created: Scan = await response.json();
+      setActiveScan(created);
 
-      // Reload lists
+      const finished = await waitForScan(created.id);
       await loadDatabase();
+
+      if (!finished) {
+        // Only surface this while the user is still signed in — otherwise the message would pop
+        // up over the login screen after a logout mid-scan.
+        if (localStorage.getItem('token')) {
+          alert('The audit is still running on the server. It will appear in your history list once it finishes.');
+        }
+        return;
+      }
+
+      setActiveScan(finished);
+
+      if (finished.status === 'FAILED') {
+        alert('The audit failed. The target site may be unreachable, or it blocked the automated crawler.');
+      }
     } catch (err: any) {
       alert(`SEO Audit Pipeline Halted: ${err?.message || 'Server timeout'}`);
     } finally {
-      clearInterval(interval);
       setIsCrawlLoading(false);
-      setApiStatusMsg('');
     }
   };
 
@@ -261,6 +333,31 @@ export default function App() {
       await loadDatabase();
     } catch {
       alert('Network failure deleting scan.');
+    }
+  };
+
+  // Opens a scan that may not be in the (filtered) history list, e.g. from a monitor or a lead.
+  const openScanById = async (scanId: string) => {
+    try {
+      const res = await fetch(`/api/scans/${scanId}`, { headers: getAuthHeaders() });
+      if (!res.ok) {
+        alert('Could not open that scan.');
+        return;
+      }
+      setActiveScan(await res.json());
+      setActiveTab('audit');
+    } catch {
+      alert('Network failure opening scan.');
+    }
+  };
+
+  const exportScans = async (format: 'csv' | 'json') => {
+    const params = new URLSearchParams(buildScanFilterQuery());
+    params.set('format', format);
+    try {
+      await downloadWithAuth(`/api/scans/export?${params.toString()}`, `seo_scans.${format}`);
+    } catch (err: any) {
+      alert(`Export failed: ${err?.message || 'unknown error'}`);
     }
   };
 
@@ -326,6 +423,8 @@ export default function App() {
           {[
             { id: 'audit', label: 'Launch Audits', icon: Globe },
             { id: 'compare', label: 'Chronological delta', icon: History, badge: scans.length > 1 ? scans.length : undefined },
+            { id: 'monitoring', label: 'Monitoring', icon: Activity },
+            { id: 'leads', label: 'Leads', icon: Users },
             { id: 'settings', label: 'White-Label Presets', icon: Palette },
             { id: 'widget', label: 'Client Lead Widget', icon: Code },
             { id: 'benchmark', label: 'Competitor Benchmark', icon: Award },
@@ -369,7 +468,10 @@ export default function App() {
         </div>
 
         {/* ACTIVE TABS DISPATCHER */}
-        <div className="space-y-8">
+        {/* Contain any render-time crash at this panel rather than unmounting the whole app and
+            leaving a blank page — report bodies are unvalidated LLM output. */}
+        <ErrorBoundary label="This report">
+          <div className="space-y-8">
           
           {/* TAB 1: AUDITS WORKBENCH */}
           {activeTab === 'audit' && (
@@ -379,7 +481,7 @@ export default function App() {
               <div className="space-y-6 lg:col-span-1">
                 <ScanForm
                   isLoading={isCrawlLoading}
-                  statusMessage={apiStatusMsg}
+                  auditEvents={auditEvents}
                   onScanSubmit={executeScan}
                   defaultUrl={activeScan ? activeScan.url : ''}
                 />
@@ -391,6 +493,42 @@ export default function App() {
                     <span>Historical Audit Logs ({scans.length})</span>
                   </h3>
                   
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        placeholder="Search by URL"
+                        className="w-full pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as any)}
+                        className="flex-1 px-2 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-[11px] text-slate-200"
+                      >
+                        <option value="">All statuses</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="FAILED">Failed</option>
+                      </select>
+                      <label className="flex items-center gap-1.5 text-[11px] text-slate-300 font-semibold cursor-pointer select-none">
+                        <input type="checkbox" checked={leadsOnly} onChange={(e) => setLeadsOnly(e.target.checked)} />
+                        Leads only
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => exportScans('csv')} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold text-slate-300 hover:text-white border border-white/10 hover:border-white/25 rounded-lg py-1.5 cursor-pointer">
+                        <Download className="h-3 w-3" /> CSV
+                      </button>
+                      <button onClick={() => exportScans('json')} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold text-slate-300 hover:text-white border border-white/10 hover:border-white/25 rounded-lg py-1.5 cursor-pointer">
+                        <Download className="h-3 w-3" /> JSON
+                      </button>
+                    </div>
+                  </div>
+
                   {scans.length > 0 ? (
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                       {scans.map(s => {
@@ -437,7 +575,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="text-center py-6 text-slate-400 font-semibold text-xs">
-                      No domains parsed yet. Complete your first scan above!
+                      {historyQuery || statusFilter || leadsOnly ? 'No scans match these filters.' : 'No domains parsed yet. Complete your first scan above!'}
                     </div>
                   )}
                 </div>
@@ -485,6 +623,14 @@ export default function App() {
             </div>
           )}
 
+          {/* MONITORING & LEADS */}
+          {activeTab === 'monitoring' && <MonitorsPanel onOpenScan={openScanById} />}
+          {activeTab === 'leads' && (
+            <div className="max-w-5xl mx-auto">
+              <LeadsPanel onOpenScan={openScanById} />
+            </div>
+          )}
+
           {/* TAB 3: WHITE LABEL AGENCY EDIT */}
           {activeTab === 'settings' && (
             <div className="max-w-3xl mx-auto">
@@ -521,7 +667,8 @@ export default function App() {
             </div>
           )}
 
-        </div>
+          </div>
+        </ErrorBoundary>
       </div>
     </div>
   );

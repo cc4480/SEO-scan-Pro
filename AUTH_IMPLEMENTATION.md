@@ -103,7 +103,7 @@ CREATE DATABASE seoscan;
 Update `.env`:
 ```env
 DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/seoscan"
-GEMINI_API_KEY="your-api-key"
+DEEPSEEK_API_KEY="your-api-key"
 JWT_SECRET="your-secret-key-min-32-chars"
 JWT_EXPIRY="7d"
 APP_URL="http://localhost:3000"

@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { ScanMode } from '../types';
+import { ScanMode, ProgressEvent } from '../types';
 import { Globe, ShieldAlert, Sliders, Layers, Search, RefreshCw, Send } from 'lucide-react';
+import AuditProgress from './AuditProgress';
 
 interface ScanFormProps {
   onScanSubmit: (payload: { url: string; mode: ScanMode; depth: number; leadInfo?: { email: string; name?: string } }) => void;
   isLoading: boolean;
-  statusMessage?: string;
+  /** Live audit log lines streamed from the server while the scan runs. */
+  auditEvents?: ProgressEvent[];
   defaultUrl?: string;
 }
 
-export default function ScanForm({ onScanSubmit, isLoading, statusMessage, defaultUrl = '' }: ScanFormProps) {
+export default function ScanForm({ onScanSubmit, isLoading, auditEvents = [], defaultUrl = '' }: ScanFormProps) {
   const [url, setUrl] = useState(defaultUrl);
   const [mode, setMode] = useState<ScanMode>('SINGLE');
   const [depth, setDepth] = useState(3);
@@ -32,11 +34,14 @@ export default function ScanForm({ onScanSubmit, isLoading, statusMessage, defau
       depth: mode === 'SINGLE' ? 1 : depth,
     };
 
+    // The API and its zod schema expect leadEmail/leadName at the top level. A nested
+    // `leadInfo` object was previously sent instead, and zod silently strips unknown keys —
+    // so these agency lead fields captured data that never reached the server.
     if (showLeadCap && leadEmail.trim()) {
-      payload.leadInfo = {
-        email: leadEmail.trim(),
-        name: leadName.trim() || undefined
-      };
+      payload.leadEmail = leadEmail.trim();
+      if (leadName.trim()) {
+        payload.leadName = leadName.trim();
+      }
     }
 
     onScanSubmit(payload);
@@ -53,7 +58,7 @@ export default function ScanForm({ onScanSubmit, isLoading, statusMessage, defau
           <span>Launch Enterprise Audit</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Perform a deep-dive SEO crawl and generate white-label PDF checklists backed by Gemini AI.
+          Perform a deep-dive SEO crawl and generate white-label PDF checklists backed by DeepSeek AI.
         </p>
       </div>
 
@@ -204,15 +209,9 @@ export default function ScanForm({ onScanSubmit, isLoading, statusMessage, defau
           )}
         </button>
 
-        {/* Crawl Pipeline Messages */}
-        {isLoading && statusMessage && (
-          <div className="bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs px-4 py-3 rounded-xl flex items-center gap-2.5 animate-pulse">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-            </span>
-            <span className="font-semibold leading-relaxed font-mono">{statusMessage}</span>
-          </div>
+        {/* Live audit log: real events streamed from the scanner as it works */}
+        {isLoading && (
+          <AuditProgress events={auditEvents} target={url} />
         )}
       </form>
     </div>

@@ -16,6 +16,8 @@ model User {
   password  String
   name      String?
   widgetKey String   @unique @default(cuid())
+  // Bumped to invalidate every previously issued JWT ("log out everywhere", password change/reset).
+  tokenVersion Int   @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -23,6 +25,8 @@ model User {
   scans        Scan[]
   settings     WhiteLabelSettings?
   resetTokens  PasswordResetToken[]
+  monitors     Monitor[]
+  apiKeys      ApiKey[]
 
   @@map("users")
 }
@@ -51,6 +55,10 @@ model Scan {
   leadEmail String?
   leadName  String?
 
+  // Set when a scheduled monitor (not a person) started this scan.
+  monitorId String?
+  monitor   Monitor? @relation(fields: [monitorId], references: [id], onDelete: SetNull)
+
   crawlData Json?
   seoReport Json?
 
@@ -62,6 +70,7 @@ model Scan {
 
   @@index([userId])
   @@index([createdAt])
+  @@index([monitorId])
   @@map("scans")
 }
 
@@ -86,4 +95,43 @@ model WhiteLabelSettings {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("white_label_settings")
+}
+
+// A recurring re-scan of one URL. The scheduler (lib/scheduler.ts) picks up rows whose
+// nextRunAt has passed, queues a scan, and emails an alert if the score regressed.
+model Monitor {
+  id          String    @id @default(cuid())
+  url         String
+  frequency   String    @default("WEEKLY") // DAILY | WEEKLY
+  active      Boolean   @default(true)
+  // Alert when the overall score falls by at least this many points versus the previous scan.
+  alertDrop   Int       @default(5)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans       Scan[]
+
+  @@index([userId])
+  @@index([active, nextRunAt])
+  @@map("monitors")
+}
+
+// Programmatic access. Only the SHA-256 of the key is stored; the plaintext is shown once.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String    // first characters of the key, so a user can tell keys apart in a list
+  keyHash    String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
 }

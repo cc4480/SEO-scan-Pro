@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
+import AdditionalChecks from './AdditionalChecks';
+import AuditProgress from './AuditProgress';
 import { Scan, WhiteLabelSettings } from '../types';
+import { buildAgentReadyPrompt } from '../agentPrompt';
 import {
   Download, Sparkles, CheckSquare, AlertTriangle, ShieldCheck,
   Clock, Server, HelpCircle, ChevronDown, ChevronUp, Image as ImageIcon,
-  ExternalLink, FileSpreadsheet, Eye, ClipboardCheck, FileText
+  ExternalLink, FileSpreadsheet, Eye, ClipboardCheck, FileText, Bot, Copy, Check
 } from 'lucide-react';
 
 interface ReportDashboardProps {
@@ -16,6 +19,10 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
   const [activeTab, setActiveTab] = useState<'all' | 'technical' | 'content' | 'aeo-geo' | 'performance'>('all');
   const [expandedHeadings, setExpandedHeadings] = useState(false);
   const [expandedLinks, setExpandedLinks] = useState(false);
+  // Declared here (above the early return below) so the hook count never changes between
+  // the "not completed" render and the full report render.
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [downloading, setDownloading] = useState<'pdf' | 'html' | null>(null);
 
   if (scan.status !== 'COMPLETED' || !scan.seoReport) {
     return (
@@ -29,8 +36,120 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
     );
   }
 
-  const { score, executiveSummary, criticalIssues, recommendedFixes, aeoAssessment, competitorComparisonText } = scan.seoReport;
+  const {
+    executiveSummary,
+    competitorComparisonText,
+    score: rawScore,
+    recommendedFixes: rawFixes,
+    criticalIssues: rawIssues,
+    aeoAssessment: rawAeo
+  } = scan.seoReport;
+
+  // The report body is unvalidated LLM JSON, and rows stored by earlier versions of the app
+  // predate today's fields. Coerce each one to a safe shape rather than throwing during render —
+  // an exception here unmounts the whole tree and shows a blank page, which is the same symptom
+  // as the hooks bug this app already suffered from.
+  const score = rawScore ?? { overall: 0, technical: 0, content: 0, aeoGeo: 0, performance: 0 };
+  const recommendedFixes = Array.isArray(rawFixes) ? rawFixes.filter((f: any) => f && typeof f === 'object') : [];
+  const criticalIssues = Array.isArray(rawIssues) ? rawIssues.filter((i: any) => typeof i === 'string') : [];
+  const aeoAssessment = rawAeo ?? {
+    generativeFriendlinessScore: 0,
+    directAnswerFriendliness: 'Not available for this report.',
+    richSnippetEligibility: [],
+    voiceSearchOptimized: false,
+    recommendationsForAeo: []
+  };
+
   const isEs = settings.language === 'es';
+
+  // Prefer the prompt DeepSeek wrote for this audit; fall back to the deterministic builder
+  // for scans stored before the field existed, so every report still offers a hand-off prompt.
+  const agentPrompt = scan.seoReport.agentReadyPrompt?.prompt
+    ? scan.seoReport.agentReadyPrompt
+    : buildAgentReadyPrompt({
+        url: scan.url,
+        score,
+        criticalIssues,
+        recommendedFixes,
+        aeoAssessment,
+        executiveSummary,
+        isSimulated: scan.crawlData?.hasSimulatedData === true
+      });
+
+  const copyAgentPrompt = async () => {
+    const text = agentPrompt.prompt;
+    let ok = false;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch {
+      // Clipboard API can be unavailable or blocked — fall through to the legacy path.
+    }
+
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+
+    if (ok) {
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2200);
+    } else {
+      alert('Copying was blocked by the browser. Select the text below and copy it manually.');
+    }
+  };
+
+  // The report endpoint requires the bearer token for owner-run scans (only widget/lead scans are
+  // public), and a plain `<a href>` navigation cannot carry an Authorization header — so clicking
+  // Download opened a tab reading "Not authorized to view this report". Fetch with the token and
+  // save the returned blob instead.
+  const downloadReport = async (format: 'pdf' | 'html') => {
+    setDownloading(format);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `/api/report/${scan.id}/download${format === 'pdf' ? '?format=pdf' : ''}`,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+      );
+
+      if (!res.ok) {
+        alert(`Could not download the report (HTTP ${res.status}). Please try again.`);
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const nameMatch = /filename="?([^";]+)"?/i.exec(disposition);
+      const filename = nameMatch?.[1] || `seo_audit_report.${format}`;
+
+      // Save via a temporary object URL, then release it.
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      alert('Could not download the report — the request failed.');
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const toggleCheckFix = (fixTitle: string) => {
     if (completedFixes.includes(fixTitle)) {
@@ -84,23 +203,29 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <a
-            href={`/api/report/${scan.id}/download?format=pdf`}
-            target="_blank"
-            className="bg-gradient-to-tr from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98]"
+          <button
+            type="button"
+            onClick={() => downloadReport('pdf')}
+            disabled={downloading !== null}
+            className="bg-gradient-to-tr from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
           >
             <Download className="h-4 w-4" />
-            <span>{isEs ? 'Descargar PDF' : 'Download PDF'}</span>
-          </a>
-          <a
-            href={`/api/report/${scan.id}/download`}
-            target="_blank"
+            <span>
+              {downloading === 'pdf'
+                ? isEs ? 'Generando PDF…' : 'Generating PDF…'
+                : isEs ? 'Descargar PDF' : 'Download PDF'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadReport('html')}
+            disabled={downloading !== null}
             title={isEs ? 'Descargar como HTML' : 'Download as HTML'}
-            className="bg-white/10 hover:bg-white/15 text-slate-200 font-bold text-xs px-4 py-3.5 rounded-xl shadow cursor-pointer flex items-center gap-2 transition active:scale-[0.98] border border-white/10"
+            className="bg-white/10 hover:bg-white/15 text-slate-200 font-bold text-xs px-4 py-3.5 rounded-xl shadow cursor-pointer flex items-center gap-2 transition active:scale-[0.98] border border-white/10 disabled:opacity-60 disabled:cursor-wait"
           >
             <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">{isEs ? 'HTML' : 'HTML'}</span>
-          </a>
+            <span className="hidden sm:inline">{downloading === 'html' ? '…' : 'HTML'}</span>
+          </button>
         </div>
       </div>
 
@@ -285,6 +410,78 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             </div>
           </div>
         </div>
+      )}
+
+      {/* AGENT-READY PROMPT — hand the audit straight to a coding agent */}
+      <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-400 to-blue-500 opacity-80" />
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-[10px] text-emerald-300 font-extrabold uppercase tracking-widest">
+                {isEs ? 'Prompt Listo para Agente' : 'Agent-Ready Prompt'}
+              </span>
+              <h3 className="font-bold text-white text-md mt-1">{agentPrompt.title}</h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isEs
+                  ? 'Pega esto en Claude Code, Cursor, Copilot o cualquier agente de código para implementar las correcciones.'
+                  : 'Paste this into Claude Code, Cursor, Copilot, or any coding agent to implement these fixes in your codebase.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={copyAgentPrompt}
+            title="Copy the full prompt to your clipboard"
+            className={`shrink-0 font-bold text-xs px-5 py-3 rounded-xl shadow-lg cursor-pointer flex items-center gap-2 transition active:scale-[0.98] border ${
+              promptCopied
+                ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300'
+                : 'bg-gradient-to-tr from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 border-white/10 text-white shadow-emerald-500/20'
+            }`}
+          >
+            {promptCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            <span>{promptCopied ? (isEs ? '¡Copiado!' : 'Copied to clipboard') : (isEs ? 'Copiar prompt' : 'Copy prompt')}</span>
+          </button>
+        </div>
+
+        {agentPrompt.checklist.length > 0 && (
+          <div className="mt-6">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">
+              {isEs ? 'Lo que implementará el agente' : 'What the agent will implement'} ({agentPrompt.checklist.length})
+            </span>
+            <ul className="space-y-1.5">
+              {agentPrompt.checklist.map((item, i) => (
+                <li key={i} className="flex items-start text-xs text-slate-200">
+                  <span className="mr-2 text-emerald-400 font-bold select-none">{i + 1}.</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="mt-6 bg-black/30 rounded-xl border border-white/10 p-4 max-h-96 overflow-y-auto">
+          <pre className="text-[11px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap break-words">
+            {agentPrompt.prompt}
+          </pre>
+        </div>
+      </div>
+
+      <AdditionalChecks crawl={scan.crawlData} />
+
+      {/* The saved audit trail: every request, measurement and fallback, in the order it happened. */}
+      {Array.isArray(scan.crawlData?.log) && scan.crawlData!.log!.length > 0 && (
+        <details className="glass-card rounded-2xl p-5 animate-fadeIn">
+          <summary className="cursor-pointer select-none text-xs font-extrabold uppercase tracking-widest text-slate-200">
+            Audit log — {scan.crawlData!.log!.length} events, exactly what the scanner did
+          </summary>
+          <div className="mt-4">
+            <AuditProgress events={scan.crawlData!.log!} target={scan.url} finished maxHeightClass="max-h-[36rem]" />
+          </div>
+        </details>
       )}
 
       {/* TECH METRICS ANALYSIS CRAWL DETAILS */}

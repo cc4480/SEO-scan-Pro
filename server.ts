@@ -6,24 +6,33 @@ import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { crawlUrl } from './lib/crawler';
-import { generateSeoReport } from './lib/deepseek';
 import { prisma } from './lib/db';
 import { hashPassword, verifyPassword, generateToken, generateResetToken, hashResetToken } from './lib/auth';
-import { authMiddleware, optionalAuthMiddleware, AuthRequest } from './lib/authMiddleware';
-import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, changeEmailSchema, deleteAccountSchema } from './lib/validation';
+import { generateApiKey } from './lib/auth';
+import { authMiddleware, optionalAuthMiddleware, requireSession, AuthRequest } from './lib/authMiddleware';
+import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, changeEmailSchema, deleteAccountSchema, monitorCreateSchema, monitorUpdateSchema, apiKeyCreateSchema, scanListQuerySchema } from './lib/validation';
 import { validateEnv } from './lib/env';
 import { sendPasswordResetEmail } from './lib/email';
-import { sendWebhook } from './lib/webhook';
+import { queueScan, recoverStuckScans } from './lib/scanRunner';
+import { startScheduler, stopScheduler, nextRunFrom } from './lib/scheduler';
+import { closeBrowser } from './lib/browser';
+import { toCsv, scanToRow, SCAN_CSV_COLUMNS } from './lib/exporters';
+import { getProgress } from './lib/progress';
 import { assertPublicUrl, SsrfBlockedError } from './lib/ssrfGuard';
 import { renderHtmlToPdf } from './lib/pdf';
 import { Scan, WhiteLabelSettings } from './src/types';
+import { buildAgentReadyPrompt } from './src/agentPrompt';
 
 // In test runs, the integration suite makes far more than 10 auth calls across many
 // independent test cases against the same shared limiter instance — a low production
 // limit here would make the suite flaky/order-dependent rather than actually testing anything.
 // Rate-limiting behavior itself is covered separately by a dedicated unit test with its own limiter.
 const isTestEnv = process.env.NODE_ENV === 'test';
+
+// Configurable so the app can run alongside other local services. 3000 is a popular default and
+// is frequently already taken (Docker Compose stacks, other dev servers), which previously made
+// the app impossible to start without editing source.
+const PORT = Number(process.env.PORT) || 3000;
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -41,15 +50,95 @@ const widgetLimiter = rateLimit({
   message: { error: 'Too many scan requests from this device. Please try again later.' }
 });
 
+// The in-dashboard "Live Widget Embed Preview" calls this same public endpoint so it genuinely
+// exercises the real widget — which meant an owner testing their embed a few times consumed the
+// 5/hour visitor bucket and locked their own live widget out for an hour. Signed-in callers get
+// a separate, far larger bucket; anonymous visitors keep the strict one.
+const widgetPreviewLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many preview scans. Please wait a few minutes and try again.' }
+});
+
+const widgetScanLimiter = (req: any, res: any, next: any) =>
+  (req.userId ? widgetPreviewLimiter : widgetLimiter)(req, res, next);
+
+// The widget polls for its result every few seconds while the crawl + AI pass run, so it
+// needs a far higher ceiling than scan creation — otherwise the 5/hour widget limit above
+// would be consumed by polling alone and the widget would appear broken.
+const widgetStatusLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many status checks. Please try again shortly.' }
+});
+
+// Scanning is the expensive operation here: every request launches a headless Chromium page,
+// crawls the target and makes a billed DeepSeek call. Unthrottled, a single account could
+// exhaust CPU/memory and run up cost without bound.
+const scanCreateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many scans queued. Please wait a few minutes and try again.' }
+});
+
+// Report export renders the HTML in a real browser on every request. Lead-scan reports are
+// downloadable without auth, so this one is reachable unauthenticated and needs its own ceiling.
+const reportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many report downloads. Please try again shortly.' }
+});
+
+function maxPendingScans(): number {
+  const n = Number(process.env.MAX_PENDING_SCANS);
+  return Number.isInteger(n) && n > 0 ? n : 5;
+}
+
 export function createApp() {
   const app = express();
 
+  // Behind Railway/Cloudflare every request arrives from the proxy's address. Without this,
+  // req.ip is the proxy for EVERY caller, so all the per-IP rate limits above would be one
+  // shared bucket (one noisy visitor locks out everybody). `1` trusts exactly one hop, so a
+  // client cannot forge X-Forwarded-For to dodge a limit. Raise it only if another proxy
+  // (e.g. Cloudflare in front of Railway) is added in front.
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
+  // This is a self-hosted app served over plain HTTP, so two of helmet's defaults
+  // actively break access rather than protect it:
+  //   - Strict-Transport-Security over HTTP makes a browser pin https://localhost and
+  //     then fail to connect, since this server has no TLS. HSTS is only meaningful
+  //     over HTTPS, so it is disabled here.
+  //   - X-Frame-Options: SAMEORIGIN blocks the app from being embedded in a preview
+  //     pane or iframe on a different origin.
+  // CSP stays off because the report HTML injects inline Tailwind/scripts (handled separately).
   app.use(helmet({
-    contentSecurityPolicy: false // report HTML pages inject inline Tailwind/scripts; CSP handled at report level separately
+    contentSecurityPolicy: false,
+    strictTransportSecurity: false,
+    frameguard: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: false,
+    originAgentCluster: false
   }));
   app.use(express.json());
+  // `localhost` and `127.0.0.1` are the same server but different browser origins, and
+  // users mix them freely when opening a local app — allow every loopback spelling.
+  const allowedOrigins = new Set([
+    process.env.APP_URL || `http://localhost:${PORT}`,
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+    `http://[::1]:${PORT}`
+  ]);
   app.use(cors({
-    origin: process.env.APP_URL || 'http://localhost:3000',
+    origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
     credentials: true
   }));
 
@@ -88,7 +177,7 @@ export function createApp() {
         }
       });
 
-      const token = generateToken(user.id);
+      const token = generateToken(user.id, user.tokenVersion);
       res.status(201).json({
         token,
         user: {
@@ -124,7 +213,7 @@ export function createApp() {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      const token = generateToken(user.id);
+      const token = generateToken(user.id, user.tokenVersion);
       res.json({
         token,
         user: {
@@ -165,13 +254,19 @@ export function createApp() {
         data: { tokenHash, expiresAt, userId: user.id }
       });
 
-      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
       const resetLink = `${appUrl}/?resetToken=${token}`;
       await sendPasswordResetEmail(user.email, resetLink);
 
-      // No real email provider is wired up yet (see lib/email.ts) — surface the link
-      // directly outside production so the flow is actually testable end to end.
-      const devFields = process.env.NODE_ENV !== 'production' ? { devResetLink: resetLink } : {};
+      // NEVER gate a credential on NODE_ENV. The previous check was `NODE_ENV !== 'production'`
+      // — but neither `npm run dev` nor `npm start` sets NODE_ENV, so on the default
+      // configuration that expression was TRUE: anyone could POST any email address to this
+      // endpoint and read a working reset token straight out of the JSON response, then use it
+      // to take over the account. It also defeated the anti-enumeration design two lines above,
+      // since only existing accounts came back with a token. Returning the link is now an
+      // explicit opt-in that belongs only on a developer's own machine.
+      const devFields =
+        process.env.RETURN_RESET_LINK_IN_RESPONSE === 'true' ? { devResetLink: resetLink } : {};
 
       res.json({ ...genericResponse, ...devFields });
     } catch (err) {
@@ -195,7 +290,7 @@ export function createApp() {
       const hashedPassword = await hashPassword(password);
 
       await prisma.$transaction([
-        prisma.user.update({ where: { id: resetToken.userId }, data: { password: hashedPassword } }),
+        prisma.user.update({ where: { id: resetToken.userId }, data: { password: hashedPassword, tokenVersion: { increment: 1 } } }),
         prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { usedAt: new Date() } }),
         // Any other outstanding tokens for this user are now moot.
         prisma.passwordResetToken.deleteMany({ where: { userId: resetToken.userId, id: { not: resetToken.id } } })
@@ -209,8 +304,15 @@ export function createApp() {
   });
 
   // Health check
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', uptime: process.uptime() });
+  // Reports unhealthy when the database is unreachable, so the platform restarts/holds traffic
+  // instead of routing users to an instance that can only return 500s.
+  app.get('/api/health', async (req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ok', uptime: process.uptime() });
+    } catch {
+      res.status(503).json({ status: 'unhealthy', uptime: process.uptime() });
+    }
   });
 
   // ===== PROTECTED ENDPOINTS (Require Authentication) =====
@@ -238,7 +340,7 @@ export function createApp() {
   });
 
   // Change password (while logged in — requires current password)
-  app.patch('/api/auth/change-password', authMiddleware, validateBody(changePasswordSchema), async (req: AuthRequest, res) => {
+  app.patch('/api/auth/change-password', authMiddleware, requireSession, validateBody(changePasswordSchema), async (req: AuthRequest, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
       const user = await prisma.user.findUnique({ where: { id: req.userId } });
@@ -250,9 +352,14 @@ export function createApp() {
       }
 
       const hashedPassword = await hashPassword(newPassword);
-      await prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } });
+      // Every other session (and any stolen token) dies with the old password; this session gets
+      // a fresh token so the user is not logged out of the tab they are using.
+      const updated = await prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword, tokenVersion: { increment: 1 } }
+      });
 
-      res.json({ success: true });
+      res.json({ success: true, token: generateToken(updated.id, updated.tokenVersion) });
     } catch (err) {
       console.error('Change-password error:', err);
       res.status(500).json({ error: 'Failed to change password' });
@@ -260,7 +367,7 @@ export function createApp() {
   });
 
   // Change email (requires current password)
-  app.patch('/api/auth/change-email', authMiddleware, validateBody(changeEmailSchema), async (req: AuthRequest, res) => {
+  app.patch('/api/auth/change-email', authMiddleware, requireSession, validateBody(changeEmailSchema), async (req: AuthRequest, res) => {
     try {
       const { newEmail, currentPassword } = req.body;
       const user = await prisma.user.findUnique({ where: { id: req.userId } });
@@ -285,7 +392,7 @@ export function createApp() {
   });
 
   // Delete account (requires current password) — cascades scans & settings via FK onDelete
-  app.delete('/api/auth/account', authMiddleware, validateBody(deleteAccountSchema), async (req: AuthRequest, res) => {
+  app.delete('/api/auth/account', authMiddleware, requireSession, validateBody(deleteAccountSchema), async (req: AuthRequest, res) => {
     try {
       const { currentPassword } = req.body;
       const user = await prisma.user.findUnique({ where: { id: req.userId } });
@@ -360,29 +467,91 @@ export function createApp() {
     }
   });
 
-  // Get all scans for user
+  // Filters shared by the scan list and the exports. Every clause is ANDed onto the userId scope.
+  const buildScanWhere = (userId: string | undefined, q: any) => {
+    const where: any = { userId };
+    if (q.q) where.url = { contains: q.q, mode: 'insensitive' };
+    if (q.status) where.status = q.status;
+    if (q.mode) where.mode = q.mode;
+    if (q.leads === 'true') where.leadEmail = { not: null };
+    if (q.monitorId) where.monitorId = q.monitorId;
+    if (q.from || q.to) where.createdAt = { ...(q.from && { gte: q.from }), ...(q.to && { lte: q.to }) };
+    return where;
+  };
+
+  // Get scans for user (search/filter via ?q=&status=&mode=&leads=&from=&to=&monitorId=)
   app.get('/api/scans', authMiddleware, async (req: AuthRequest, res) => {
     try {
+      const parsed = scanListQuerySchema.safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid query' });
+      const query = parsed.data;
+
       // Capped + paginated to avoid an unbounded query as scan history grows.
       // Response stays a plain array for backward compatibility; total count comes back
       // via the X-Total-Count header for callers that want to build real pagination UI.
-      const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 50;
+      const where = buildScanWhere(req.userId, query);
 
       const [scans, total] = await Promise.all([
-        prisma.scan.findMany({
-          where: { userId: req.userId },
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * limit,
-          take: limit
-        }),
-        prisma.scan.count({ where: { userId: req.userId } })
+        prisma.scan.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+        prisma.scan.count({ where })
       ]);
 
       res.setHeader('X-Total-Count', total.toString());
       res.json(scans);
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch scans' });
+    }
+  });
+
+  // Export scans as CSV or JSON (same filters as the list). Declared before /api/scans/:id.
+  app.get('/api/scans/export', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const parsed = scanListQuerySchema.safeParse(req.query);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid query' });
+      const scans = await prisma.scan.findMany({
+        where: buildScanWhere(req.userId, parsed.data),
+        orderBy: { createdAt: 'desc' },
+        take: 5000
+      });
+      const rows = scans.map((sc) => scanToRow(sc as any));
+      if (req.query.format === 'json') {
+        res.setHeader('Content-Disposition', 'attachment; filename=seo_scans.json');
+        return res.json(rows);
+      }
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename=seo_scans.csv');
+      res.send(toCsv(SCAN_CSV_COLUMNS, rows));
+    } catch (err) {
+      console.error('Export error:', err);
+      res.status(500).json({ error: 'Failed to export scans' });
+    }
+  });
+
+  // Leads captured by the embeddable widget: one row per lead scan.
+  app.get('/api/leads', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const where = { userId: req.userId, leadEmail: { not: null } };
+      const page = Math.max(1, parseInt(req.query.page as string) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+      const [scans, total] = await Promise.all([
+        prisma.scan.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+        prisma.scan.count({ where })
+      ]);
+      res.setHeader('X-Total-Count', total.toString());
+      res.json(scans.map((sc) => ({
+        scanId: sc.id,
+        email: sc.leadEmail,
+        name: sc.leadName,
+        url: sc.url,
+        status: sc.status,
+        overallScore: (sc.seoReport as any)?.score?.overall ?? null,
+        criticalIssuesCount: (sc.seoReport as any)?.criticalIssues?.length ?? 0,
+        capturedAt: sc.createdAt
+      })));
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch leads' });
     }
   });
 
@@ -404,6 +573,27 @@ export function createApp() {
     }
   });
 
+  // Live audit log: every request, measurement and fallback the scan has made so far.
+  // `?after=N` returns only events past the first N, so a poller transfers each line once.
+  // While the scan runs the log is served from memory; afterwards from the copy saved on the scan.
+  app.get('/api/scans/:id/events', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const after = Math.max(0, parseInt(req.query.after as string) || 0);
+      const scan = await prisma.scan.findFirst({ where: { id: req.params.id, userId: req.userId }, select: { status: true } });
+      if (!scan) return res.status(404).json({ error: 'Scan not found' });
+
+      let events = getProgress(req.params.id, req.userId!, after);
+      if (events === null) {
+        const saved = await prisma.scan.findFirst({ where: { id: req.params.id, userId: req.userId }, select: { crawlData: true } });
+        const log = (saved?.crawlData as any)?.log;
+        events = Array.isArray(log) ? log.slice(after) : [];
+      }
+      res.json({ status: scan.status, events, next: after + events.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch scan log' });
+    }
+  });
+
   // Delete a scan
   app.delete('/api/scans/:id', authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -420,7 +610,7 @@ export function createApp() {
   });
 
   // Create new scan
-  app.post('/api/scan', authMiddleware, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
+  app.post('/api/scan', authMiddleware, scanCreateLimiter, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
     try {
       const { url, mode, depth, leadEmail, leadName } = req.body;
 
@@ -438,6 +628,13 @@ export function createApp() {
         throw err;
       }
 
+      // Per-user backlog cap: the queue bounds how many scans RUN at once, this bounds how many
+      // one account can have waiting, so a single user cannot fill the queue for everyone.
+      const backlog = await prisma.scan.count({ where: { userId: req.userId, status: 'PENDING' } });
+      if (backlog >= maxPendingScans()) {
+        return res.status(429).json({ error: `You already have ${backlog} scans in progress. Wait for some to finish before starting more.` });
+      }
+
       const newScan = await prisma.scan.create({
         data: {
           url,
@@ -450,8 +647,8 @@ export function createApp() {
         }
       });
 
-      // Start scan asynchronously
-      scanAsync(newScan.id, url, newScan.mode as 'SINGLE' | 'FULL_SITE', newScan.depth, req.userId);
+      // Queued, not run inline: lib/queue.ts limits how many scans execute concurrently.
+      queueScan(newScan.id, url, newScan.mode as 'SINGLE' | 'FULL_SITE', newScan.depth, req.userId!);
 
       res.status(202).json(newScan);
     } catch (err: any) {
@@ -460,8 +657,164 @@ export function createApp() {
     }
   });
 
-  // Public widget endpoint (no auth required for lead capture)
-  app.post('/api/widget/scan', widgetLimiter, validateBody(widgetScanSchema), async (req, res) => {
+  // ===== SESSIONS & API KEYS =====
+
+  // "Log out everywhere": invalidates every previously issued JWT for this account. API keys are
+  // unaffected (revoke those individually). The caller gets a fresh token so this tab keeps working.
+  app.post('/api/auth/logout-all', authMiddleware, requireSession, async (req: AuthRequest, res) => {
+    try {
+      const user = await prisma.user.update({ where: { id: req.userId }, data: { tokenVersion: { increment: 1 } } });
+      res.json({ success: true, token: generateToken(user.id, user.tokenVersion) });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to sign out other sessions' });
+    }
+  });
+
+  app.get('/api/api-keys', authMiddleware, requireSession, async (req: AuthRequest, res) => {
+    try {
+      const keys = await prisma.apiKey.findMany({
+        where: { userId: req.userId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true, prefix: true, lastUsedAt: true, createdAt: true }
+      });
+      res.json(keys);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch API keys' });
+    }
+  });
+
+  app.post('/api/api-keys', authMiddleware, requireSession, validateBody(apiKeyCreateSchema), async (req: AuthRequest, res) => {
+    try {
+      if ((await prisma.apiKey.count({ where: { userId: req.userId } })) >= 10) {
+        return res.status(400).json({ error: 'You can have at most 10 API keys. Revoke one first.' });
+      }
+      const { key, prefix, keyHash } = generateApiKey();
+      const created = await prisma.apiKey.create({ data: { name: req.body.name, prefix, keyHash, userId: req.userId! } });
+      // The plaintext key exists only in this response; only its hash is stored.
+      res.status(201).json({ id: created.id, name: created.name, prefix, createdAt: created.createdAt, key });
+    } catch (err) {
+      console.error('API key create error:', err);
+      res.status(500).json({ error: 'Failed to create API key' });
+    }
+  });
+
+  app.delete('/api/api-keys/:id', authMiddleware, requireSession, async (req: AuthRequest, res) => {
+    try {
+      const result = await prisma.apiKey.deleteMany({ where: { id: req.params.id, userId: req.userId } });
+      if (result.count === 0) return res.status(404).json({ error: 'API key not found' });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to revoke API key' });
+    }
+  });
+
+  // ===== MONITORS (scheduled re-scans) =====
+
+  app.get('/api/monitors', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const monitors = await prisma.monitor.findMany({ where: { userId: req.userId }, orderBy: { createdAt: 'desc' } });
+      // Latest completed score per monitor, so the list can show a current value without N requests.
+      const withScore = await Promise.all(monitors.map(async (m) => {
+        const latest = await prisma.scan.findFirst({
+          where: { monitorId: m.id, status: 'COMPLETED' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, createdAt: true, seoReport: true }
+        });
+        return { ...m, latestScore: (latest?.seoReport as any)?.score?.overall ?? null, latestScanId: latest?.id ?? null };
+      }));
+      res.json(withScore);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch monitors' });
+    }
+  });
+
+  app.post('/api/monitors', authMiddleware, validateBody(monitorCreateSchema), async (req: AuthRequest, res) => {
+    try {
+      const { url, frequency, alertDrop } = req.body;
+      try {
+        await assertPublicUrl(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) return res.status(400).json({ error: err.message });
+        throw err;
+      }
+      if ((await prisma.monitor.count({ where: { userId: req.userId } })) >= 10) {
+        return res.status(400).json({ error: 'You can have at most 10 monitors. Delete one first.' });
+      }
+      // nextRunAt defaults to now, so the first scheduler tick runs it immediately and the trend
+      // line has a starting point.
+      const monitor = await prisma.monitor.create({
+        data: { url, frequency: frequency ?? 'WEEKLY', alertDrop: alertDrop ?? 5, userId: req.userId! }
+      });
+      res.status(201).json(monitor);
+    } catch (err) {
+      console.error('Monitor create error:', err);
+      res.status(500).json({ error: 'Failed to create monitor' });
+    }
+  });
+
+  app.patch('/api/monitors/:id', authMiddleware, validateBody(monitorUpdateSchema), async (req: AuthRequest, res) => {
+    try {
+      const existing = await prisma.monitor.findFirst({ where: { id: req.params.id, userId: req.userId } });
+      if (!existing) return res.status(404).json({ error: 'Monitor not found' });
+      const { active, frequency, alertDrop } = req.body;
+      const monitor = await prisma.monitor.update({
+        where: { id: existing.id },
+        data: {
+          ...(active !== undefined && { active }),
+          ...(alertDrop !== undefined && { alertDrop }),
+          ...(frequency !== undefined && { frequency, nextRunAt: nextRunFrom(existing.lastRunAt ?? new Date(), frequency) })
+        }
+      });
+      res.json(monitor);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update monitor' });
+    }
+  });
+
+  app.delete('/api/monitors/:id', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await prisma.monitor.deleteMany({ where: { id: req.params.id, userId: req.userId } });
+      if (result.count === 0) return res.status(404).json({ error: 'Monitor not found' });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete monitor' });
+    }
+  });
+
+  // Score history for the trend chart: oldest first.
+  app.get('/api/monitors/:id/history', authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const monitor = await prisma.monitor.findFirst({ where: { id: req.params.id, userId: req.userId } });
+      if (!monitor) return res.status(404).json({ error: 'Monitor not found' });
+      const scans = await prisma.scan.findMany({
+        where: { monitorId: monitor.id, status: 'COMPLETED' },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+        select: { id: true, createdAt: true, seoReport: true, crawlData: true }
+      });
+      res.json(scans.map((sc) => {
+        const score = (sc.seoReport as any)?.score ?? {};
+        return {
+          scanId: sc.id,
+          at: sc.createdAt,
+          overall: score.overall ?? null,
+          technical: score.technical ?? null,
+          content: score.content ?? null,
+          aeoGeo: score.aeoGeo ?? null,
+          performance: score.performance ?? null,
+          criticalIssuesCount: (sc.seoReport as any)?.criticalIssues?.length ?? 0,
+          simulated: (sc.crawlData as any)?.hasSimulatedData === true
+        };
+      }));
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch monitor history' });
+    }
+  });
+
+  // Public widget endpoint (no auth required for lead capture). optionalAuthMiddleware only
+  // distinguishes "the signed-in owner testing their own embed" from "an anonymous visitor" for
+  // rate-limiting purposes — the scan is still attributed via widgetKey, never via the token.
+  app.post('/api/widget/scan', optionalAuthMiddleware, widgetScanLimiter, validateBody(widgetScanSchema), async (req, res) => {
     try {
       const { url, email, name, widgetKey } = req.body;
 
@@ -494,7 +847,7 @@ export function createApp() {
         }
       });
 
-      scanAsync(scan.id, url, 'SINGLE', 1, user.id, { email, name });
+      queueScan(scan.id, url, 'SINGLE', 1, user.id, { email, name });
 
       res.status(202).json({
         success: true,
@@ -507,11 +860,40 @@ export function createApp() {
     }
   });
 
+  // Public widget status. The anonymous prospect who ran an embed scan has no auth token,
+  // but the widget shows the score, the executive summary and a report link — all of which
+  // only exist once the async scan finishes. Deliberately scoped to scans that carry a
+  // leadEmail so this can never be used to read an owner-run audit, and scan ids are cuids,
+  // so they are not enumerable.
+  app.get('/api/widget/scan/:id', widgetStatusLimiter, async (req, res) => {
+    try {
+      const scan = await prisma.scan.findUnique({ where: { id: req.params.id } });
+
+      if (!scan || !scan.leadEmail) {
+        return res.status(404).json({ error: 'Scan not found' });
+      }
+
+      const report = scan.seoReport as any;
+
+      res.json({
+        id: scan.id,
+        url: scan.url,
+        status: scan.status,
+        score: report?.score?.overall ?? null,
+        criticalIssuesCount: report?.criticalIssues?.length ?? 0,
+        executiveSummary: report?.executiveSummary ?? null
+      });
+    } catch (err) {
+      console.error('Widget status error:', err);
+      res.status(500).json({ error: 'Failed to fetch widget scan status' });
+    }
+  });
+
   // Download report
   // Public widget leads (scans with a leadEmail) are downloadable without auth — the
   // anonymous prospect who ran the widget scan needs to fetch their own report.
   // Owner-run scans (no leadEmail) still require the owning user's auth token.
-  app.get('/api/report/:id/download', optionalAuthMiddleware, async (req: AuthRequest, res) => {
+  app.get('/api/report/:id/download', reportLimiter, optionalAuthMiddleware, async (req: AuthRequest, res) => {
     try {
       const scan = await prisma.scan.findUnique({ where: { id: req.params.id } });
 
@@ -556,10 +938,18 @@ async function startServer() {
   validateEnv();
 
   const app = createApp();
-  const PORT = 3000;
 
-  // ===== VITE DEV SERVER SETUP =====
-  if (process.env.NODE_ENV !== 'production') {
+  // The scan queue is in memory: anything PENDING at boot was orphaned by the last shutdown.
+  await recoverStuckScans();
+  startScheduler();
+
+  // ===== STATIC BUILD vs VITE DEV SERVER =====
+  // `npm run dev` runs this file through tsx, hot-reloading via Vite middleware.
+  // `npm start` runs the bundled server from dist/, which instead serves the
+  // pre-built SPA. Detecting the bundle location means a stale dist/ folder can
+  // never shadow the dev server, and no NODE_ENV juggling is needed on Windows.
+  const runningFromBundle = /[/\\]dist[/\\]server\.(mjs|cjs|js)$/.test(new URL(import.meta.url).pathname);
+  if (!runningFromBundle && process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
@@ -567,70 +957,51 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Hashed assets are safe to cache forever, but index.html must never be cached.
+    // A browser that loaded it while the Vite dev server was running holds an entry
+    // pointing at /src/main.tsx; if that stale HTML is reused against this server the
+    // module request returns HTML instead of JS and the app renders a blank page.
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-store');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      }
+    }));
     app.get('*', (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`SEO Scan Pro v1.1 full-stack gateway hosted beautifully on port ${PORT}`);
+  // Bind without an explicit host so Node listens dual-stack (`::`, which also accepts
+  // IPv4-mapped connections). The previous '0.0.0.0' bind was IPv4-only, and since
+  // Windows resolves `localhost` to ::1 first, every fresh connection stalled ~2s
+  // waiting for the IPv6 attempt to fail before falling back to 127.0.0.1.
+  const server = app.listen(PORT, () => {
+    console.log(`SEO Scan Pro v1.1 running at http://localhost:${PORT}`);
   });
-}
 
-// Async scan processor
-// Runs fire-and-forget (not awaited by the route handler), so the scan row can be deleted
-// out from under it mid-flight (user deletes the scan, or their account, while this is still
-// running). Both updates below use updateMany, which is a no-op on zero matched rows instead
-// of throwing P2025 — a plain update() here would produce an unhandled rejection in that case.
-async function scanAsync(
-  scanId: string,
-  url: string,
-  mode: 'SINGLE' | 'FULL_SITE',
-  depth: number,
-  userId: string,
-  lead?: { email: string; name?: string }
-) {
-  try {
-    console.log(`Starting scan ${scanId} for URL: ${url}`);
-    const crawlRes = await crawlUrl(url, mode, depth);
-    const seoReport = await generateSeoReport(crawlRes);
-
-    await prisma.scan.updateMany({
-      where: { id: scanId },
-      data: {
-        status: 'COMPLETED',
-        crawlData: crawlRes as any,
-        seoReport: seoReport as any
-      }
+  // Railway sends SIGTERM on every redeploy and gives ~10s. Stop taking traffic and new monitor
+  // runs, then release Chromium and the database so nothing is left half-written or orphaned.
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received — shutting down.`);
+    stopScheduler();
+    const force = setTimeout(() => process.exit(1), 8000);
+    force.unref();
+    server.close(async () => {
+      await closeBrowser().catch(() => {});
+      await prisma.$disconnect().catch(() => {});
+      process.exit(0);
     });
-
-    console.log(`Scan ${scanId} completed successfully`);
-
-    // Widget-originated (lead) scans notify the agency's configured webhook, if any.
-    if (lead) {
-      const settings = await prisma.whiteLabelSettings.findUnique({ where: { userId } });
-      if (settings?.webhookUrl) {
-        await sendWebhook(settings.webhookUrl, settings.webhookSecret, {
-          event: 'seo_lead_captured',
-          timestamp: new Date().toISOString(),
-          agencyName: settings.agencyName,
-          scanId,
-          targetUrl: url,
-          leadEmail: lead.email,
-          leadName: lead.name,
-          overallScore: (seoReport as any).score?.overall,
-          criticalIssuesCount: (seoReport as any).criticalIssues?.length ?? 0
-        });
-      }
-    }
-  } catch (err: any) {
-    console.error(`Scan ${scanId} failed:`, err);
-    await prisma.scan.updateMany({
-      where: { id: scanId },
-      data: { status: 'FAILED' }
-    });
-  }
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 // Report HTML generator
@@ -667,6 +1038,20 @@ function generateReportHtml(scan: any, settings: any): string {
   const isEs = settings?.language === 'es';
   const customTitle = isEs ? 'Auditoría SEO Profesional' : 'Professional SEO Audit';
 
+  // The same hand-off prompt the dashboard offers. Prefers the one DeepSeek wrote for this
+  // audit and falls back to the deterministic builder for scans that predate the field.
+  const agentPrompt = scan.seoReport?.agentReadyPrompt?.prompt
+    ? scan.seoReport.agentReadyPrompt
+    : buildAgentReadyPrompt({
+        url: scan.url,
+        score: scan.seoReport?.score ?? { overall: 0, technical: 0, content: 0, aeoGeo: 0, performance: 0 },
+        criticalIssues: scan.seoReport?.criticalIssues ?? [],
+        recommendedFixes: scan.seoReport?.recommendedFixes ?? [],
+        aeoAssessment: scan.seoReport?.aeoAssessment,
+        executiveSummary: scan.seoReport?.executiveSummary,
+        isSimulated: scan.crawlData?.hasSimulatedData === true
+      });
+
   return `
 <!DOCTYPE html>
 <html>
@@ -676,8 +1061,7 @@ function generateReportHtml(scan: any, settings: any): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
     @media print {
       .no-print { display: none !important; }
       body { background: white; color: black; }
@@ -736,6 +1120,14 @@ function generateReportHtml(scan: any, settings: any): string {
     <div class="mb-8 p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-white border border-slate-100">
       <h2 class="text-xl font-bold mb-3" style="color: ${safeColor(settings?.primaryColor)}">Executive Summary</h2>
       <p class="text-slate-600 leading-relaxed text-sm">${escapeHtml(scan.seoReport?.executiveSummary || 'N/A')}</p>
+    </div>
+
+    <div class="mb-8 p-6 rounded-2xl bg-slate-900 border border-slate-700">
+      <h2 class="text-lg font-bold mb-1 text-emerald-400">${isEs ? 'Prompt Listo para Agente' : 'Agent-Ready Prompt'}</h2>
+      <p class="text-xs text-slate-400 mb-4">${isEs
+        ? 'Pega este bloque en tu agente de código (Claude Code, Cursor, Copilot) para implementar las correcciones.'
+        : 'Paste this block into your coding agent (Claude Code, Cursor, Copilot) to implement the fixes below.'}</p>
+      <pre class="text-[11px] leading-relaxed text-slate-200 whitespace-pre-wrap break-words font-mono">${escapeHtml(agentPrompt.prompt)}</pre>
     </div>
 
     <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-400">

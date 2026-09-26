@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WhiteLabelSettings } from '../types';
+import { copyText } from '../clipboard';
 import { Image, Palette, Eye, CheckCircle2, Languages, HelpCircle, Copy, Check, ShieldCheck } from 'lucide-react';
 
 interface WhiteLabelEditorProps {
@@ -35,9 +36,13 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
   const [enableEmailAlerts, setEnableEmailAlerts] = useState(!!settings.enableEmailAlerts);
   const [secretCopied, setSecretCopied] = useState(false);
 
-  const copyWebhookSecret = () => {
+  const copyWebhookSecret = async () => {
     if (!settings.webhookSecret) return;
-    navigator.clipboard.writeText(settings.webhookSecret);
+    const ok = await copyText(settings.webhookSecret);
+    if (!ok) {
+      alert('Copying was blocked by the browser. Select the secret and copy it manually.');
+      return;
+    }
     setSecretCopied(true);
     setTimeout(() => setSecretCopied(false), 2000);
   };

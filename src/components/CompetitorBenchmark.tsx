@@ -11,7 +11,7 @@ export default function CompetitorBenchmark() {
     {
       feature: 'Artificial Intelligence GEO Audit',
       category: 'ai',
-      ourApp: { ok: true, note: 'Gemini-Powered analysis modeling conversational engine visibility (ChatGPT Search, Perplexity)' },
+      ourApp: { ok: true, note: 'DeepSeek-Powered analysis modeling conversational engine visibility (ChatGPT Search, Perplexity)' },
       seoptimer: { ok: false, note: 'Legacy code scanner only' },
       woorank: { ok: false, note: 'Static meta validator only' },
       sitechecker: { ok: false, note: 'On-page rules check only' }

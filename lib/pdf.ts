@@ -20,7 +20,7 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
         .catch(() => req.abort('blockedbyclient').catch(() => {}));
     });
     // setContent's waitUntil is narrower than goto's — 'load' still waits for the page's
-    // external resources (Tailwind CDN script, Google Fonts) referenced in the initial HTML.
+    // external resources (Tailwind CDN script) referenced in the initial HTML.
     await page.setContent(html, { waitUntil: 'load' });
     // The report HTML has @media print rules (hides the "Print/Save" button, forces a
     // white background) — explicitly emulate print so those apply for the server render too.

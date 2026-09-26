@@ -109,3 +109,55 @@ describe('GET /api/report/:id/download — public vs owner-only access', () => {
     await prisma.user.deleteMany({ where: { email } });
   }, 25000);
 });
+
+describe('GET /api/widget/scan/:id — public status, lead scans only', () => {
+  it('reports status, score and summary for a lead scan once the async run completes', async () => {
+    const email = testEmail('status-lead');
+    const reg = await request(app).post('/api/auth/register').send({ email, password: 'password123' });
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${reg.body.token}`);
+
+    const widgetRes = await request(app)
+      .post('/api/widget/scan')
+      .send({ url: 'example.com', email: 'lead@prospect.com', widgetKey: me.body.widgetKey });
+    const scanId = widgetRes.body.scanId;
+
+    // Reachable immediately (no auth) while the crawl/AI pass is still running — this is
+    // exactly what the embeddable widget polls.
+    const pending = await request(app).get(`/api/widget/scan/${scanId}`);
+    expect(pending.status).toBe(200);
+    expect(['PENDING', 'COMPLETED']).toContain(pending.body.status);
+
+    await waitForScanStatus(app, scanId, reg.body.token);
+
+    const done = await request(app).get(`/api/widget/scan/${scanId}`);
+    expect(done.status).toBe(200);
+    expect(done.body.status).toBe('COMPLETED');
+    // The widget renders these three fields directly — they must exist, not be undefined.
+    expect(typeof done.body.score).toBe('number');
+    expect(typeof done.body.criticalIssuesCount).toBe('number');
+    expect(done.body.executiveSummary).toBeTypeOf('string');
+
+    await prisma.user.deleteMany({ where: { email } });
+  }, 25000);
+
+  it('never exposes an owner-run scan (no leadEmail) even though ids are valid', async () => {
+    const email = testEmail('status-owner');
+    const reg = await request(app).post('/api/auth/register').send({ email, password: 'password123' });
+
+    const scanRes = await request(app)
+      .post('/api/scan')
+      .set('Authorization', `Bearer ${reg.body.token}`)
+      .send({ url: 'example.com', mode: 'SINGLE', depth: 1 });
+    const scanId = scanRes.body.id;
+
+    const res = await request(app).get(`/api/widget/scan/${scanId}`);
+    expect(res.status).toBe(404);
+
+    await prisma.user.deleteMany({ where: { email } });
+  }, 25000);
+
+  it('returns 404 for an unknown scan id', async () => {
+    const res = await request(app).get('/api/widget/scan/not-a-real-scan-id');
+    expect(res.status).toBe(404);
+  });
+});

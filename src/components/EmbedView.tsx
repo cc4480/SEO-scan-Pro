@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Award, RefreshCw, Send, Sparkles, CheckSquare } from 'lucide-react';
+import { waitForWidgetScan } from '../widgetScan';
 
 export default function EmbedView() {
   const [url, setUrl] = useState('');
@@ -54,14 +55,23 @@ export default function EmbedView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: cleanUrl, email: email.trim(), name: name.trim(), widgetKey })
       });
-      clearInterval(interval);
 
       const data = await response.json();
-      if (response.ok) {
-        setTestResult(data);
-      } else {
+      if (!response.ok) {
         alert(data.error || 'Widget audit engine halted temporarily.');
+        return;
       }
+
+      // Poll until the report actually exists, otherwise the score/summary below would
+      // render as "undefined" and the PDF link would 404 against a PENDING scan.
+      const finished = await waitForWidgetScan(data.scanId, setStatusMessage);
+
+      if (!finished || finished.status !== 'COMPLETED') {
+        alert('The audit is still running on the server. Please try again in a moment.');
+        return;
+      }
+
+      setTestResult({ ...data, ...finished });
     } catch {
       alert('Network timeout running widget audit.');
     } finally {

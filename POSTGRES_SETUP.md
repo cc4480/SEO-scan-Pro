@@ -97,8 +97,8 @@ Update `.env` with your values:
 # Database
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/seoscan"
 
-# Gemini API (from Google AI Studio)
-GEMINI_API_KEY="your-api-key-here"
+# DeepSeek API (from platform.deepseek.com)
+DEEPSEEK_API_KEY="your-api-key-here"
 
 # JWT (keep this secret!)
 JWT_SECRET="your-super-secret-jwt-key-that-must-be-at-least-32-characters-long-for-security!"
