@@ -1,10 +1,10 @@
 import { CrawlResult, DeepSeekSeoReport } from '../src/types';
 import { buildAgentReadyPrompt } from '../src/agentPrompt';
 import { clip, heartbeat, noopEmit, type Emit } from './progress';
+import { deepseekModelConfig } from './deepseekModel';
 
 const apiKey = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const { baseUrl: DEEPSEEK_BASE_URL, model: DEEPSEEK_MODEL, extra: DEEPSEEK_EXTRA } = deepseekModelConfig();
 
 // Lazy key check so the app server never crashes on launch if the user hasn't set up credentials yet
 function getApiKey(): string | null {
@@ -144,6 +144,7 @@ Respond with a single valid JSON object (no markdown fences, no commentary) matc
       },
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
+        ...DEEPSEEK_EXTRA,
         messages: [
           { role: 'system', content: systemInstruction },
           { role: 'user', content: prompt }
