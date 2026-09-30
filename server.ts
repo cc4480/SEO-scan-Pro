@@ -207,6 +207,8 @@ export function createApp() {
         }
       });
     } catch (err: any) {
+      // Two simultaneous signups can both pass the findUnique check; the unique index is the real guard.
+      if (err?.code === 'P2002') return res.status(409).json({ error: 'Email already registered' });
       console.error('Registration error:', err);
       res.status(500).json({ error: 'Registration failed' });
     }
@@ -453,6 +455,7 @@ export function createApp() {
       await issueVerificationEmail(updated, process.env.APP_URL || `http://localhost:${PORT}`);
       res.json({ success: true, email: updated.email });
     } catch (err) {
+      if (err?.code === 'P2002') return res.status(409).json({ error: 'That email is already in use' });
       console.error('Change-email error:', err);
       res.status(500).json({ error: 'Failed to change email' });
     }

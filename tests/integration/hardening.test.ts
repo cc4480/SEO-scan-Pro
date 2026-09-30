@@ -77,3 +77,31 @@ describe('daily scan allowance', () => {
     expect(res.body.code).not.toBe('DAILY_LIMIT');
   });
 });
+
+describe('one account per mailbox', () => {
+  it('stores emails lowercase, accepts any casing at login, and rejects a case-variant duplicate', async () => {
+    const local = `Test-Hardening-Case-${Date.now()}`;
+    const mixed = `${local}@Example.COM`;
+
+    const reg = await request(app).post('/api/auth/register').send({ email: mixed, password: 'original-pw1' });
+    expect(reg.status).toBe(201);
+    expect(reg.body.user.email).toBe(mixed.toLowerCase());
+    const stored = await prisma.user.findUnique({ where: { id: reg.body.user.id } });
+    expect(stored!.email).toBe(mixed.toLowerCase());
+
+    const login = await request(app).post('/api/auth/login').send({ email: mixed.toUpperCase(), password: 'original-pw1' });
+    expect(login.status).toBe(200);
+
+    const dupe = await request(app).post('/api/auth/register').send({ email: mixed.toLowerCase(), password: 'another-pw2' });
+    expect(dupe.status).toBe(409);
+  });
+
+  it('answers a simultaneous duplicate signup with 409, not a server error', async () => {
+    const address = `test-hardening-race-${Date.now()}@example.com`;
+    const results = await Promise.all([1, 2, 3].map(() => request(app).post('/api/auth/register').send({ email: address, password: 'original-pw1' })));
+    const codes = results.map((r) => r.status).sort();
+    expect(codes.filter((c) => c === 201)).toHaveLength(1);
+    expect(codes.filter((c) => c === 409)).toHaveLength(2);
+    expect(codes).not.toContain(500);
+  });
+});

@@ -8,19 +8,23 @@ const passwordRule = z
   .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
   .regex(/[0-9]/, 'Password must contain at least one number');
 
+// Addresses are stored lowercase so the unique index means "one account per mailbox": without this,
+// Alice@x.com and alice@x.com would be two accounts, and login would depend on how it was typed.
+const emailRule = z.string().trim().toLowerCase().email('Invalid email address').max(255);
+
 export const registerSchema = z.object({
-  email: z.string().trim().email('Invalid email address').max(255),
+  email: emailRule,
   password: passwordRule,
   name: z.string().trim().max(120).optional()
 });
 
 export const loginSchema = z.object({
-  email: z.string().trim().email('Invalid email address').max(255),
+  email: emailRule,
   password: z.string().min(1, 'Password is required').max(128)
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().trim().email('Invalid email address').max(255)
+  email: emailRule
 });
 
 export const resetPasswordSchema = z.object({
@@ -38,7 +42,7 @@ export const changePasswordSchema = z.object({
 });
 
 export const changeEmailSchema = z.object({
-  newEmail: z.string().trim().email('Invalid email address').max(255),
+  newEmail: emailRule,
   currentPassword: z.string().min(1, 'Current password is required')
 });
 
@@ -50,13 +54,13 @@ export const scanCreateSchema = z.object({
   url: z.string().trim().min(1, 'URL is required').max(2048),
   mode: z.enum(['SINGLE', 'FULL_SITE']).optional(),
   depth: z.coerce.number().int().min(1).max(5).optional(),
-  leadEmail: z.string().trim().email().max(255).optional().or(z.literal('')),
+  leadEmail: z.string().trim().toLowerCase().email().max(255).optional().or(z.literal('')),
   leadName: z.string().trim().max(120).optional()
 });
 
 export const widgetScanSchema = z.object({
   url: z.string().trim().min(1, 'URL is required').max(2048),
-  email: z.string().trim().email('Invalid email address').max(255),
+  email: emailRule,
   name: z.string().trim().max(120).optional(),
   widgetKey: z.string().trim().min(1, 'Widget key is required')
 });
