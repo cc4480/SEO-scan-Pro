@@ -10,6 +10,7 @@ import CompetitorBenchmark from './components/CompetitorBenchmark';
 import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
 import ScanRunningPanel from './components/ScanRunningPanel';
+import AnimatedNumber from './ui/AnimatedNumber';
 // The landing page carries the animation libraries; signed-in users never download them.
 const Landing = lazy(() => import('./landing/Landing'));
 import { motion } from 'motion/react';
@@ -424,7 +425,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased pb-16 relative overflow-hidden">
+    <div className="min-h-screen text-slate-100 font-sans antialiased pb-16 relative overflow-hidden">
       
       {/* BACKGROUND GLOWS (Frosted Glass Theme) */}
       <div className="absolute inset-0 z-0 opacity-30 pointer-events-none">
@@ -454,7 +455,7 @@ export default function App() {
           <div className="hidden md:flex items-center gap-6">
             <div className="text-right">
               <div className="text-[9px] text-slate-400 uppercase font-black">Scans Logged</div>
-              <div className="text-xs font-bold text-slate-200">{scans.length} Audits</div>
+              <div className="text-xs font-bold text-slate-200"><AnimatedNumber value={scans.length} /> Audits</div>
             </div>
             <div className="h-6 w-px bg-white/10" />
             <div className="text-right">

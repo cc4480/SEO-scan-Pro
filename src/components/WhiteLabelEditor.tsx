@@ -162,7 +162,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
                 >
                   <div>
                     <div className="text-xs font-bold text-white">{cp.name}</div>
-                    <div className="text-[10px] text-slate-405 mt-0.5">{cp.desc}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">{cp.desc}</div>
                   </div>
                   <div className="flex gap-1.5 font-sans">
                     <span className="w-4 h-4 rounded-full border border-white/20 shadow-sm" style={{ backgroundColor: cp.primary }} />

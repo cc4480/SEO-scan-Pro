@@ -41,12 +41,12 @@ export default function LoginForm({ onLoginSuccess, onSwitchToRegister, onSwitch
   };
 
   return (
-    <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex items-center justify-center p-4">
+    <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-950/50 to-slate-900/30 flex items-center justify-center p-4">
       <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[800px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md" data-stagger>
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="logo-glow w-16 h-16 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <LogIn className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">SEO Scan Pro</h1>
@@ -54,7 +54,7 @@ export default function LoginForm({ onLoginSuccess, onSwitchToRegister, onSwitch
         </div>
 
         {/* Form Card */}
-        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 shadow-2xl">
+        <div className="spot-card bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 shadow-2xl">
           <h2 className="text-xl font-bold text-white mb-6">Welcome Back</h2>
 
           {error && (

@@ -26,20 +26,23 @@ body {
 
 /* Glassmorphism Styles */
 .glass-card {
-  background: rgba(255, 255, 255, 0.05);
+  /* The radial layer is a cursor light: --mx/--my are set by AppMotion while the pointer is over the card. */
+  background-color: rgba(255, 255, 255, 0.05);
+  background-image: radial-gradient(360px circle at var(--mx, -600px) var(--my, -600px), rgba(56, 189, 248, 0.12), transparent 65%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08); /* White border with low opacity */
 }
 
 .glass-card-hover:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.15);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-panel {
-  background: rgba(10, 15, 30, 0.6);
+  background-color: rgba(10, 15, 30, 0.6);
+  background-image: radial-gradient(360px circle at var(--mx, -600px) var(--my, -600px), rgba(56, 189, 248, 0.10), transparent 65%);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -206,3 +209,53 @@ body {
 /* SplitText masks each word with overflow:clip, which trims descenders (p, y, g) at the line box.
    overflow-clip-margin widens the clip region without shifting layout. */
 .split-heading div { overflow-clip-margin: 0.2em; }
+
+/* ---- App-wide motion ---- */
+/* The live backdrop sits behind #root, so the app's own layers must be transparent, not opaque. */
+#root { position: relative; z-index: 1; }
+
+button:not(:disabled) { transition: transform 0.15s ease, translate 0.2s ease, filter 0.2s ease, box-shadow 0.25s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; }
+button:not(:disabled):active { transform: scale(0.97); }
+button[class*="bg-gradient-to"]:not(:disabled):hover { filter: brightness(1.12); translate: 0 -1px; }
+button[class*="bg-gradient-to"]:not(.btn-shine) { position: relative; overflow: hidden; }
+button[class*="bg-gradient-to"]:not(.btn-shine)::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-20deg);
+}
+button[class*="bg-gradient-to"]:not(.btn-shine):not(:disabled):hover::after { animation: btnShine 0.8s ease; }
+
+/* Auth screens: header, card and each field rise in one after another. */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(22px) scale(0.98); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+[data-stagger] > * { animation: riseIn 0.85s cubic-bezier(0.16, 1, 0.3, 1) both; }
+[data-stagger] > *:nth-child(2) { animation-delay: 0.14s; }
+[data-stagger] > *:nth-child(3) { animation-delay: 0.28s; }
+[data-stagger] > *:nth-child(4) { animation-delay: 0.42s; }
+[data-stagger] form > * { animation: riseIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
+[data-stagger] form > *:nth-child(1) { animation-delay: 0.35s; }
+[data-stagger] form > *:nth-child(2) { animation-delay: 0.42s; }
+[data-stagger] form > *:nth-child(3) { animation-delay: 0.49s; }
+[data-stagger] form > *:nth-child(4) { animation-delay: 0.56s; }
+[data-stagger] form > *:nth-child(5) { animation-delay: 0.63s; }
+[data-stagger] form > *:nth-child(6) { animation-delay: 0.7s; }
+
+@keyframes logoGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0), 0 10px 30px -8px rgba(37, 99, 235, 0.5); }
+  50% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0.08), 0 10px 40px -6px rgba(52, 211, 153, 0.55); }
+}
+.logo-glow { animation: logoGlow 3.2s ease-in-out infinite; }
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+[data-stagger] .bg-red-500\/10 { animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-stagger] > *, [data-stagger] form > *, .logo-glow, [data-stagger] .bg-red-500\/10 { animation: none; }
+  button[class*="bg-gradient-to"]:not(.btn-shine):not(:disabled):hover::after { animation: none; }
+}

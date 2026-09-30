@@ -1,3 +1,5 @@
+import { motion } from 'motion/react';
+import AnimatedNumber from '../ui/AnimatedNumber';
 import React, { useState } from 'react';
 import AdditionalChecks from './AdditionalChecks';
 import AuditProgress from './AuditProgress';
@@ -234,48 +236,48 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
         {/* SCORE GAUGE OVERALL */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center relative overflow-hidden flex flex-col items-center justify-center">
           <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: settings.primaryColor }} />
-          <span className="text-[10px] text-slate-405 font-bold uppercase tracking-wide">Overall SEO Health</span>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Overall SEO Health</span>
           <div className="text-4xl font-extrabold mt-2.5" style={{ color: settings.primaryColor || '#60a5fa' }}>
-            {score.overall}<span className="text-xs font-normal text-slate-405">/100</span>
+            <AnimatedNumber value={score.overall} /><span className="text-xs font-normal text-slate-400">/100</span>
           </div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${score.overall}%`, backgroundColor: settings.primaryColor || '#60a5fa' }} />
+            <motion.div className="h-full rounded-full" style={{ backgroundColor: settings.primaryColor || '#60a5fa' }} initial={{ width: 0 }} whileInView={{ width: `${score.overall}%` }} viewport={{ once: true }} transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* TECHNICAL */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center">
-          <span className="text-[10px] text-slate-405 font-bold uppercase tracking-wide">Technical SEO</span>
-          <div className="text-3xl font-extrabold text-blue-400 mt-2.5">{score.technical}%</div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Technical SEO</span>
+          <div className="text-3xl font-extrabold text-blue-400 mt-2.5"><AnimatedNumber value={score.technical} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${score.technical}%` }} />
+            <motion.div className="h-full bg-blue-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.technical}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* CONTENT */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center">
-          <span className="text-[10px] text-slate-405 font-bold uppercase tracking-wide">Semantic / Content</span>
-          <div className="text-3xl font-extrabold text-indigo-400 mt-2.5">{score.content}%</div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Semantic / Content</span>
+          <div className="text-3xl font-extrabold text-indigo-400 mt-2.5"><AnimatedNumber value={score.content} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${score.content}%` }} />
+            <motion.div className="h-full bg-indigo-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.content}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* AEO / AI GEO */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center col-span-1">
-          <span className="text-[10px] text-slate-405 font-bold uppercase tracking-wide">AI Engine/AEO</span>
-          <div className="text-3xl font-extrabold text-amber-400 mt-2.5">{score.aeoGeo}%</div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">AI Engine/AEO</span>
+          <div className="text-3xl font-extrabold text-amber-400 mt-2.5"><AnimatedNumber value={score.aeoGeo} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${score.aeoGeo}%` }} />
+            <motion.div className="h-full bg-amber-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.aeoGeo}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* PERFORMANCE */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center col-span-2 md:col-span-1">
-          <span className="text-[10px] text-slate-405 font-bold uppercase tracking-wide">Loading Performance</span>
-          <div className="text-3xl font-extrabold text-emerald-400 mt-2.5">{score.performance}%</div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Loading Performance</span>
+          <div className="text-3xl font-extrabold text-emerald-400 mt-2.5"><AnimatedNumber value={score.performance} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${score.performance}%` }} />
+            <motion.div className="h-full bg-emerald-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.performance}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
       </div>

@@ -79,7 +79,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
   const speedDiff = (currentScan.crawlData?.mainPage?.loadTimeMs || 0) - (baseScan.crawlData?.mainPage?.loadTimeMs || 0);
 
   const formatDelta = (num: number, invert = false) => {
-    if (num === 0) return <span className="text-xs text-slate-405 font-bold select-none">No Change</span>;
+    if (num === 0) return <span className="text-xs text-slate-400 font-bold select-none">No Change</span>;
     const isWorse = invert ? num > 0 : num < 0;
     const displayNum = num > 0 ? `+${num}` : num;
     
@@ -107,7 +107,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
             <TrendingUp className="text-emerald-400 h-5 w-5" />
             <span>SEO Chronological Progress Tracking</span>
           </h2>
-          <p className="text-xs text-slate-405 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             Comparing your active scan against previous reports to outline SEO improvements.
           </p>
         </div>

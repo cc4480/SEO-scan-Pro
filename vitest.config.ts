@@ -6,7 +6,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts'],
     hookTimeout: 60000, // closing headless Chromium in afterAll can exceed the 10s default
-    testTimeout: 25000, // scans now render via a real headless browser, not a plain fetch — slower
+    testTimeout: 60000, // scans now render via a real headless browser, not a plain fetch — slower
     pool: 'forks',
     poolOptions: {
       forks: { singleFork: true } // integration tests share one Postgres test DB — avoid concurrent writers

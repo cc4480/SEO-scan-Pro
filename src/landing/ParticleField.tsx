@@ -12,7 +12,7 @@ const MOUSE_DIST = 190;
  * along the edges and nodes that lean toward the cursor. Canvas 2D, DPR-aware, paused when
  * off-screen or the tab is hidden, and drawn once (static) for reduced-motion users.
  */
-export default function ParticleField({ className = '' }: { className?: string }) {
+export default function ParticleField({ className = '', density = 1 }: { className?: string; density?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function ParticleField({ className = '' }: { className?: string }
       w = rect.width; h = rect.height;
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.max(24, Math.min(90, Math.round((w * h) / 15000)));
+      const count = Math.max(16, Math.min(90, Math.round(((w * h) / 15000) * density)));
       nodes = Array.from({ length: count }, () => ({
         x: Math.random() * w, y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.28, vy: (Math.random() - 0.5) * 0.28,
@@ -117,7 +117,7 @@ export default function ParticleField({ className = '' }: { className?: string }
       cancelAnimationFrame(raf); ro.disconnect(); io.disconnect();
       window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerleave', onLeave);
     };
-  }, []);
+  }, [density]);
 
   return <canvas ref={canvasRef} className={`absolute inset-0 h-full w-full ${className}`} aria-hidden />;
 }

@@ -46,18 +46,18 @@ export default function ResetPasswordForm({ token, onResetSuccess }: ResetPasswo
   };
 
   return (
-    <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex items-center justify-center p-4">
+    <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-950/50 to-slate-900/30 flex items-center justify-center p-4">
       <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[800px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-md" data-stagger>
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <div className="logo-glow w-16 h-16 bg-gradient-to-tr from-emerald-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <ShieldCheck className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white tracking-tight">Set New Password</h1>
           <p className="text-slate-400 text-sm mt-2">Choose a new password for your account</p>
         </div>
 
-        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 shadow-2xl">
+        <div className="spot-card bg-slate-800/50 backdrop-blur-xl border border-slate-700 rounded-2xl p-8 shadow-2xl">
           {success ? (
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-start gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" />

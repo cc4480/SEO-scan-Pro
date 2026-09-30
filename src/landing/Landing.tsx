@@ -58,7 +58,7 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+      <div data-landing className="min-h-screen bg-slate-950 text-slate-100 antialiased">
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-slate-900">
           Skip to content
         </a>

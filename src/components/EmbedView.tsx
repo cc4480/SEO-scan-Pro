@@ -198,7 +198,7 @@ export default function EmbedView() {
                 </div>
 
                 <div className="bg-black/20 p-3 rounded-lg border border-white/5 text-left">
-                  <span className="text-[9px] text-slate-405 font-bold uppercase tracking-wide block mb-1">Executive Summary</span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide block mb-1">Executive Summary</span>
                   <p className="text-xs text-slate-300 line-clamp-3 leading-relaxed italic pr-1">
                     "{testResult.executiveSummary}"
                   </p>
