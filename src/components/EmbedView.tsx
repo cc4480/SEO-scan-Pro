@@ -97,7 +97,7 @@ export default function EmbedView() {
               <span>Free Professional SEO Appraisal</span>
             </h4>
             <p className="text-[10px] text-indigo-200 mt-1 font-medium">
-              Discover your organic traffic red flags and AI search index score in 15 seconds.
+              Discover your organic traffic red flags and AI search index score in about a minute.
             </p>
           </div>
 

@@ -128,7 +128,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
         <div className="bg-[#131d35]/60 backdrop-blur-xl max-w-lg mx-auto rounded-3xl shadow-2xl overflow-hidden border border-white/15">
           <div className="bg-gradient-to-r from-slate-900/80 to-[#1d273f]/85 px-6 py-5 text-center text-white border-b border-white/10">
             <h4 className="font-extrabold tracking-tight text-md">Free Professional SEO Appraisal</h4>
-            <p className="text-[10px] text-indigo-300 mt-1">Discover your organic traffic red flags and AI search index score in 15 seconds.</p>
+            <p className="text-[10px] text-indigo-300 mt-1">Discover your organic traffic red flags and AI search index score in about a minute.</p>
           </div>
 
           <div className="p-6">
