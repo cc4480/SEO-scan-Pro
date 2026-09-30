@@ -18,6 +18,8 @@ model User {
   widgetKey String   @unique @default(cuid())
   // Bumped to invalidate every previously issued JWT ("log out everywhere", password change/reset).
   tokenVersion Int   @default(0)
+  // Null until the owner clicks the link emailed at signup (or after an email change).
+  emailVerifiedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -25,10 +27,26 @@ model User {
   scans        Scan[]
   settings     WhiteLabelSettings?
   resetTokens  PasswordResetToken[]
+  verifyTokens EmailVerificationToken[]
   monitors     Monitor[]
   apiKeys      ApiKey[]
 
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  // The address the link proves ownership of; a stale link cannot verify a newer address.
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 model PasswordResetToken {

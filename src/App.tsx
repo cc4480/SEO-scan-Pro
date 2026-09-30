@@ -8,6 +8,8 @@ import WidgetEmbedBuilder from './components/WidgetEmbedBuilder';
 import EmbedView from './components/EmbedView';
 import CompetitorBenchmark from './components/CompetitorBenchmark';
 import ErrorBoundary from './components/ErrorBoundary';
+import VerifyEmailBanner from './components/VerifyEmailBanner';
+import { EMAIL_VERIFIED_EVENT } from './components/VerifyLinkNotice';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
 import ForgotPasswordForm from './components/Auth/ForgotPasswordForm';
@@ -27,7 +29,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
   const [resetToken, setResetToken] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string; emailVerified?: boolean } | null>(null);
 
   // ---- Hooks -----------------------------------------------------------------------
   // EVERY hook must run on every render, before any early return below. Eight useState
@@ -137,6 +139,13 @@ export default function App() {
       // Clean the token out of the visible URL/history without a full navigation.
       window.history.replaceState({}, '', window.location.pathname);
     }
+  }, []);
+
+  // VerifyLinkNotice fires this after a confirmation link succeeds, so the banner clears without a reload.
+  useEffect(() => {
+    const refresh = () => { loadCurrentUser(); };
+    window.addEventListener(EMAIL_VERIFIED_EVENT, refresh);
+    return () => window.removeEventListener(EMAIL_VERIFIED_EVENT, refresh);
   }, []);
 
   // Check authentication on mount
@@ -376,6 +385,8 @@ export default function App() {
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-blue-600 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[5%] right-[-5%] w-[40vw] h-[40vw] bg-indigo-800 rounded-full blur-[100px]"></div>
       </div>
+
+      {currentUser && currentUser.emailVerified === false && <VerifyEmailBanner email={currentUser.email} />}
 
       {/* PROFESSIONAL NAVBAR TOP */}
       <nav className="glass-nav sticky top-0 z-40 shadow-lg relative">

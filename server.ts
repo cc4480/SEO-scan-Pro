@@ -10,9 +10,10 @@ import { prisma } from './lib/db';
 import { hashPassword, verifyPassword, generateToken, generateResetToken, hashResetToken } from './lib/auth';
 import { generateApiKey } from './lib/auth';
 import { authMiddleware, optionalAuthMiddleware, requireSession, AuthRequest } from './lib/authMiddleware';
-import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema, changeEmailSchema, deleteAccountSchema, monitorCreateSchema, monitorUpdateSchema, apiKeyCreateSchema, scanListQuerySchema } from './lib/validation';
+import { validateBody, registerSchema, loginSchema, scanCreateSchema, widgetScanSchema, settingsSchema, forgotPasswordSchema, resetPasswordSchema, verifyEmailSchema, changePasswordSchema, changeEmailSchema, deleteAccountSchema, monitorCreateSchema, monitorUpdateSchema, apiKeyCreateSchema, scanListQuerySchema } from './lib/validation';
 import { validateEnv } from './lib/env';
 import { sendPasswordResetEmail } from './lib/email';
+import { issueVerificationEmail, consumeVerificationToken, requireVerifiedEmail, verificationRequired } from './lib/emailVerification';
 import { queueScan, recoverStuckScans } from './lib/scanRunner';
 import { startScheduler, stopScheduler, nextRunFrom } from './lib/scheduler';
 import { closeBrowser } from './lib/browser';
@@ -178,6 +179,8 @@ export function createApp() {
         }
       });
 
+      await issueVerificationEmail(user, process.env.APP_URL || `http://localhost:${PORT}`);
+
       const token = generateToken(user.id, user.tokenVersion);
       res.status(201).json({
         token,
@@ -185,6 +188,7 @@ export function createApp() {
           id: user.id,
           email: user.email,
           name: user.name,
+          emailVerified: !verificationRequired(),
           createdAt: user.createdAt,
           updatedAt: user.updatedAt
         }
@@ -304,6 +308,31 @@ export function createApp() {
     }
   });
 
+  // Confirm an email address from the link sent at signup
+  app.post('/api/auth/verify-email', authLimiter, validateBody(verifyEmailSchema), async (req, res) => {
+    try {
+      const ok = await consumeVerificationToken(req.body.token);
+      if (!ok) return res.status(400).json({ error: 'This confirmation link is invalid or has expired. Request a new one from the app.' });
+      res.json({ message: 'Email confirmed.' });
+    } catch (err) {
+      console.error('Verify-email error:', err);
+      res.status(500).json({ error: 'Failed to confirm email' });
+    }
+  });
+
+  // Send a fresh confirmation link to the signed-in user
+  app.post('/api/auth/resend-verification', authMiddleware, requireSession, authLimiter, async (req: AuthRequest, res) => {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!user.emailVerifiedAt) await issueVerificationEmail(user, process.env.APP_URL || `http://localhost:${PORT}`);
+      res.json({ message: 'If your address still needs confirming, a new link is on its way.' });
+    } catch (err) {
+      console.error('Resend-verification error:', err);
+      res.status(500).json({ error: 'Failed to send confirmation email' });
+    }
+  });
+
   // Health check
   // Reports unhealthy when the database is unreachable, so the platform restarts/holds traffic
   // instead of routing users to an instance that can only return 500s.
@@ -346,6 +375,8 @@ export function createApp() {
         email: user.email,
         name: user.name,
         widgetKey: user.widgetKey,
+        // Deployments without an email provider cannot verify anyone, so nobody is held back.
+        emailVerified: !!user.emailVerifiedAt || !verificationRequired(),
         createdAt: user.createdAt,
         updatedAt: user.updatedAt
       });
@@ -398,7 +429,8 @@ export function createApp() {
         return res.status(409).json({ error: 'That email is already in use' });
       }
 
-      const updated = await prisma.user.update({ where: { id: user.id }, data: { email: newEmail } });
+      const updated = await prisma.user.update({ where: { id: user.id }, data: { email: newEmail, emailVerifiedAt: null } });
+      await issueVerificationEmail(updated, process.env.APP_URL || `http://localhost:${PORT}`);
       res.json({ success: true, email: updated.email });
     } catch (err) {
       console.error('Change-email error:', err);
@@ -625,7 +657,7 @@ export function createApp() {
   });
 
   // Create new scan
-  app.post('/api/scan', authMiddleware, scanCreateLimiter, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
+  app.post('/api/scan', authMiddleware, requireVerifiedEmail, scanCreateLimiter, validateBody(scanCreateSchema), async (req: AuthRequest, res) => {
     try {
       const { url, mode, depth, leadEmail, leadName } = req.body;
 
@@ -698,7 +730,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/api-keys', authMiddleware, requireSession, validateBody(apiKeyCreateSchema), async (req: AuthRequest, res) => {
+  app.post('/api/api-keys', authMiddleware, requireSession, requireVerifiedEmail, validateBody(apiKeyCreateSchema), async (req: AuthRequest, res) => {
     try {
       if ((await prisma.apiKey.count({ where: { userId: req.userId } })) >= 10) {
         return res.status(400).json({ error: 'You can have at most 10 API keys. Revoke one first.' });
@@ -743,7 +775,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/monitors', authMiddleware, validateBody(monitorCreateSchema), async (req: AuthRequest, res) => {
+  app.post('/api/monitors', authMiddleware, requireVerifiedEmail, validateBody(monitorCreateSchema), async (req: AuthRequest, res) => {
     try {
       const { url, frequency, alertDrop } = req.body;
       try {
@@ -838,6 +870,9 @@ export function createApp() {
       const user = await prisma.user.findUnique({ where: { widgetKey } });
       if (!user) {
         return res.status(404).json({ error: 'Invalid widget key. This embed is not linked to an active account.' });
+      }
+      if (verificationRequired() && !user.emailVerifiedAt) {
+        return res.status(403).json({ error: 'This embed is not active yet: the account owner has not confirmed their email address.' });
       }
 
       // Refused before a scan record is created. This endpoint's URL is fetched

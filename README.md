@@ -73,6 +73,10 @@ Set these variables on the service (see `.env.example` for all of them):
 | `RESEND_API_KEY`, `EMAIL_FROM` | Without them password reset and alerts cannot send. |
 | `TRUST_PROXY_HOPS` | Default `1` (Railway edge). Use `2` if Cloudflare also proxies in front; wrong values make per-IP rate limits share or forge the client IP. |
 
+**Email verification:** new accounts must confirm their address (emailed link, valid 24h) before they can start scans, create monitors or API keys, and an unconfirmed owner's embed widget is inactive. This is enforced only when `RESEND_API_KEY` and `EMAIL_FROM` are both set — without a provider nobody could receive the link, so nothing is gated. Accounts that existed before the feature are grandfathered as verified. Changing an account's email un-verifies it.
+
+**Crawler files:** `/robots.txt` and `/sitemap.xml` are generated from `APP_URL`. HSTS is sent when `NODE_ENV=production`; framing is denied everywhere except `/embed`.
+
 Leave `RETURN_RESET_LINK_IN_RESPONSE` **unset**. Run exactly **one** replica: the scan queue and monitor scheduler are in-process. On SIGTERM (every redeploy) the server stops the scheduler, drains HTTP, closes Chromium and the database.
 
 Local check of the image: `docker build -t seoscan .` then `docker run --rm -p 3000:3000 --env-file .env seoscan`.

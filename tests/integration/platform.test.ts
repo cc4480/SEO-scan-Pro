@@ -392,7 +392,7 @@ describe('password reset email', () => {
     const u = await signUp('reset-mail');
     await request(app).post('/api/auth/forgot-password').send({ email: u.email });
 
-    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes('api.resend.com'));
+    const call = fetchMock.mock.calls.find((c) => String(c[0]).includes('api.resend.com') && JSON.parse(c[1].body).text.includes('resetToken='));
     expect(call).toBeTruthy();
     const body = JSON.parse(call![1].body);
     expect(body.to).toEqual([u.email]);
