@@ -168,7 +168,7 @@ export function createApp() {
           name: name || undefined,
           settings: {
             create: {
-              agencyName: 'SEO Scan Elite',
+              agencyName: 'SEO Scan Pro',
               primaryColor: '#0ea5e9',
               accentColor: '#1e40af',
               customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',

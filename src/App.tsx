@@ -9,6 +9,9 @@ import EmbedView from './components/EmbedView';
 import CompetitorBenchmark from './components/CompetitorBenchmark';
 import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
+import ScanRunningPanel from './components/ScanRunningPanel';
+import Landing from './landing/Landing';
+import { motion } from 'motion/react';
 import { EMAIL_VERIFIED_EVENT } from './components/VerifyLinkNotice';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
@@ -26,7 +29,11 @@ import {
 export default function App() {
   const isEmbedPage = typeof window !== 'undefined' && window.location.pathname === '/embed';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
+  // Signed-out visitors land on the marketing page; /login and /signup, and any emailed link, go straight to the forms.
+  const initialPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const initialParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const [showLanding, setShowLanding] = useState(initialPath === '/' && !initialParams.get('resetToken') && !initialParams.get('verifyToken'));
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>(initialPath === '/signup' ? 'register' : 'login');
   const [resetToken, setResetToken] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name?: string; widgetKey: string; emailVerified?: boolean } | null>(null);
@@ -40,7 +47,7 @@ export default function App() {
   // dashboard. Keep all hooks above the early returns.
   const [scans, setScans] = useState<Scan[]>([]);
   const [settings, setSettings] = useState<WhiteLabelSettings>({
-    agencyName: 'SEO Scan Elite',
+    agencyName: 'SEO Scan Pro',
     primaryColor: '#0ea5e9',
     accentColor: '#1e40af',
     customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
@@ -51,6 +58,7 @@ export default function App() {
   const [activeScan, setActiveScan] = useState<Scan | null>(null);
   const [selectedCompareScan, setSelectedCompareScan] = useState<Scan | undefined>(undefined);
   const [isCrawlLoading, setIsCrawlLoading] = useState(false);
+  const [scanningUrl, setScanningUrl] = useState('');
   // Real log lines streamed from the server while a scan runs (see /api/scans/:id/events).
   const [auditEvents, setAuditEvents] = useState<ProgressEvent[]>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -148,6 +156,18 @@ export default function App() {
     return () => window.removeEventListener(EMAIL_VERIFIED_EVENT, refresh);
   }, []);
 
+  // Browser back/forward between the landing page and the auth forms.
+  useEffect(() => {
+    const onPop = () => {
+      const p = window.location.pathname;
+      setShowLanding(p === '/');
+      if (p === '/signup') setAuthMode('register');
+      else if (p === '/login' || p === '/') setAuthMode('login');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   // Check authentication on mount
   useEffect(() => {
     loadCurrentUser()
@@ -192,8 +212,22 @@ export default function App() {
     );
   }
 
-  // Show login/register/forgot/reset if not authenticated
+  // Show landing, or login/register/forgot/reset, if not authenticated
   if (!isAuthenticated) {
+    const openAuth = (mode: 'login' | 'register') => {
+      setAuthMode(mode);
+      setShowLanding(false);
+      window.history.pushState({}, '', mode === 'register' ? '/signup' : '/login');
+      window.scrollTo(0, 0);
+    };
+    if (showLanding && authMode === 'login') {
+      return <Landing onGetStarted={() => openAuth('register')} onSignIn={() => openAuth('login')} />;
+    }
+    const backToHome = () => {
+      setShowLanding(true);
+      setAuthMode('login');
+      window.history.pushState({}, '', '/');
+    };
     if (authMode === 'forgot') {
       return <ForgotPasswordForm onSwitchToLogin={() => setAuthMode('login')} />;
     }
@@ -210,6 +244,12 @@ export default function App() {
     }
     return (
       <>
+        <button
+          type="button" onClick={backToHome}
+          className="fixed left-4 top-4 z-50 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/5 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300"
+        >
+          &larr; Home
+        </button>
         {authMode === 'login' ? (
           <LoginForm
             onLoginSuccess={() => loadCurrentUser().then(() => setIsAuthenticated(true))}
@@ -261,6 +301,7 @@ export default function App() {
   // Run dynamic scanning triggers
   const executeScan = async (payload: { url: string; mode: any; depth: number; leadEmail?: string; leadName?: string }) => {
     setIsCrawlLoading(true);
+    setScanningUrl(payload.url);
     // The live log is fed by real events from the scanner (waitForScan below), not a timer.
     setAuditEvents([]);
 
@@ -460,16 +501,24 @@ export default function App() {
                     }
                   }
                 }}
-                className={`py-3 px-4.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer select-none whitespace-nowrap border ${
+                aria-current={isActive ? 'page' : undefined}
+                className={`relative py-3 px-4.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer select-none whitespace-nowrap border focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${
                   isActive
-                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20 border-white/20'
+                    ? 'text-white shadow-lg shadow-blue-500/20 border-white/20'
                     : 'glass-card border-transparent text-slate-400 hover:text-white glass-card-hover'
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
+                {isActive && (
+                  <motion.span
+                    layoutId="active-tab"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <Icon className={`relative h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span className="relative">{tab.label}</span>
                 {tab.badge && (
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-inner ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'}`}>
+                  <span className={`relative text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-inner ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-300'}`}>
                     {tab.badge}
                   </span>
                 )}
@@ -482,7 +531,13 @@ export default function App() {
         {/* Contain any render-time crash at this panel rather than unmounting the whole app and
             leaving a blank page — report bodies are unvalidated LLM output. */}
         <ErrorBoundary label="This report">
-          <div className="space-y-8">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-8"
+          >
           
           {/* TAB 1: AUDITS WORKBENCH */}
           {activeTab === 'audit' && (
@@ -594,14 +649,22 @@ export default function App() {
 
               {/* Right Column Core Dashboard Viewport */}
               <div className="lg:col-span-2">
-                {activeScan ? (
+                {isCrawlLoading ? (
+                  <ScanRunningPanel events={auditEvents} target={scanningUrl} />
+                ) : activeScan ? (
                   <ReportDashboard
                     scan={activeScan}
                     settings={settings}
                   />
                 ) : (
                   <div className="glass-card rounded-3xl border border-dashed border-white/25 p-16 text-center shadow-lg">
-                    <FileSearch className="h-12 w-12 text-slate-500 mx-auto mb-3" />
+                    <motion.div
+                      animate={{ y: [0, -6, 0] }}
+                      transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                      className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400/20 to-emerald-400/20 border border-white/10"
+                    >
+                      <FileSearch className="h-8 w-8 text-sky-200" />
+                    </motion.div>
                     <h3 className="font-bold text-slate-200 text-md">No Audit Selection</h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto mt-2">
                       Input your business website URL on the left or select an index from the history lists to open the analysis.
@@ -678,7 +741,7 @@ export default function App() {
             </div>
           )}
 
-          </div>
+          </motion.div>
         </ErrorBoundary>
       </div>
     </div>

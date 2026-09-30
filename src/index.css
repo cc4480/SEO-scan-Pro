@@ -114,3 +114,31 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+/* ---- Scan-in-progress motion ---- */
+@keyframes radarSweep { to { transform: rotate(360deg); } }
+.radar-sweep { animation: radarSweep 2.6s linear infinite; }
+
+@keyframes stageShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.stage-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.14), transparent);
+  animation: stageShimmer 1.6s ease-in-out infinite;
+}
+
+/* Everything that loops or slides is switched off for people who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .radar-sweep, .stage-shimmer, .animate-fadeIn { animation: none; }
+}
+
+/* ---- Landing page ---- */
+.landing-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
+}
