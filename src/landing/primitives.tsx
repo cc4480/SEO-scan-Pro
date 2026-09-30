@@ -3,6 +3,7 @@ import { useGSAP } from '@gsap/react';
 import { gsap, SplitText, prefersReducedMotion } from './motionKit';
 
 interface SplitHeadingProps {
+  id?: string;
   as?: 'h1' | 'h2' | 'h3';
   className?: string;
   children: ReactNode;
@@ -16,7 +17,7 @@ interface SplitHeadingProps {
  * reveal survives the heading re-wrapping at other widths. Hidden until split so the raw text
  * never flashes before the animation starts.
  */
-export function SplitHeading({ as = 'h2', className = '', children, immediate = false, delay = 0 }: SplitHeadingProps) {
+export function SplitHeading({ as = 'h2', id, className = '', children, immediate = false, delay = 0 }: SplitHeadingProps) {
   const ref = useRef<HTMLHeadingElement>(null);
   const Tag = as as any;
 
@@ -33,7 +34,7 @@ export function SplitHeading({ as = 'h2', className = '', children, immediate = 
     return () => split.revert();
   }, { scope: ref });
 
-  return <Tag ref={ref} className={`split-heading ${className}`} style={{ visibility: 'hidden' }}>{children}</Tag>;
+  return <Tag ref={ref} id={id} className={`split-heading ${className}`} style={{ visibility: 'hidden' }}>{children}</Tag>;
 }
 
 /** Pulls its child toward the cursor, then springs back. */

@@ -94,7 +94,7 @@ export function XRay() {
       <div className="relative mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8">
         <div className="text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Real-browser crawling</p>
-          <SplitHeading as="h2" className="mt-3 text-3xl font-extrabold tracking-tight text-white text-balance sm:text-5xl">
+          <SplitHeading as="h2" id="xray-title" className="mt-3 text-3xl font-extrabold tracking-tight text-white text-balance sm:text-5xl">
             Most crawlers see an empty page. We see yours.
           </SplitHeading>
           <p className="mx-auto mt-4 max-w-xl text-slate-300">Scroll to compare what a plain-HTML crawler receives from a JavaScript-built site with what a real browser renders.</p>
