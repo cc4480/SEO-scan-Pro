@@ -112,22 +112,23 @@ export function createApp() {
   // (e.g. Cloudflare in front of Railway) is added in front.
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
-  // This is a self-hosted app served over plain HTTP, so two of helmet's defaults
-  // actively break access rather than protect it:
-  //   - Strict-Transport-Security over HTTP makes a browser pin https://localhost and
-  //     then fail to connect, since this server has no TLS. HSTS is only meaningful
-  //     over HTTPS, so it is disabled here.
-  //   - X-Frame-Options: SAMEORIGIN blocks the app from being embedded in a preview
-  //     pane or iframe on a different origin.
-  // CSP stays off because the report HTML injects inline Tailwind/scripts (handled separately).
+  // HSTS is only sent in production, where Railway serves the app over HTTPS. Locally it stays
+  // off: over plain HTTP a browser would pin https://localhost and then fail to connect.
+  // Framing is refused everywhere except /embed, the lead-capture widget agencies iframe into
+  // their own sites. CSP stays off because the report HTML injects inline Tailwind/scripts.
+  const isProd = process.env.NODE_ENV === 'production';
   app.use(helmet({
     contentSecurityPolicy: false,
-    strictTransportSecurity: false,
+    strictTransportSecurity: isProd ? { maxAge: 15552000, includeSubDomains: true } : false,
     frameguard: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginOpenerPolicy: false,
     originAgentCluster: false
   }));
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/embed')) res.setHeader('X-Frame-Options', 'DENY');
+    next();
+  });
   app.use(express.json());
   // `localhost` and `127.0.0.1` are the same server but different browser origins, and
   // users mix them freely when opening a local app — allow every loopback spelling.
@@ -313,6 +314,20 @@ export function createApp() {
     } catch {
       res.status(503).json({ status: 'unhealthy', uptime: process.uptime() });
     }
+  });
+
+  // Crawler files are generated from APP_URL so the sitemap always carries the real origin.
+  // The API and the widget frame are not content; only the landing page is worth indexing.
+  const publicOrigin = () => (process.env.APP_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(
+      `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /embed\n\nSitemap: ${publicOrigin()}/sitemap.xml\n`
+    );
+  });
+  app.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml').send(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${publicOrigin()}/</loc></url>\n</urlset>\n`
+    );
   });
 
   // ===== PROTECTED ENDPOINTS (Require Authentication) =====
