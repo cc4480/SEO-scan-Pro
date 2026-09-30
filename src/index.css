@@ -142,3 +142,67 @@ body {
   -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
   mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 75%);
 }
+
+/* ---- Landing: cinematic effects ---- */
+.spot-card { position: relative; overflow: hidden; }
+.spot-card::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), rgba(56, 189, 248, 0.16), transparent 65%);
+}
+.spot-card::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s; border-radius: inherit; padding: 1px;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(52, 211, 153, 0.75), transparent 65%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.spot-card:hover::before, .spot-card:hover::after { opacity: 1; }
+
+.hero-light::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(560px circle at var(--hx, 50%) var(--hy, 30%), rgba(56, 189, 248, 0.09), transparent 60%);
+}
+
+@keyframes textShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+.shimmer-text {
+  background-image: linear-gradient(100deg, #38bdf8 0%, #60a5fa 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #60a5fa 85%, #38bdf8 100%);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: textShimmer 5s linear infinite;
+}
+
+@keyframes auroraDrift { 0%, 100% { transform: translate(-50%, 0) scale(1); } 50% { transform: translate(-46%, 30px) scale(1.12); } }
+@keyframes auroraDrift2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-40px, 40px) scale(1.15); } }
+.aurora { animation: auroraDrift 14s ease-in-out infinite; }
+.aurora-2 { animation: auroraDrift2 17s ease-in-out infinite; }
+
+.btn-shine::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent); transform: skewX(-20deg);
+}
+.btn-shine:hover::after { animation: btnShine 0.8s ease; }
+@keyframes btnShine { to { left: 130%; } }
+
+@keyframes marquee { to { transform: translateX(-50%); } }
+.marquee-track { animation: marquee 38s linear infinite; }
+.marquee-track.marquee-reverse { animation-direction: reverse; animation-duration: 46s; }
+.marquee-mask:hover .marquee-track { animation-play-state: paused; }
+.marquee-mask { -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora, .aurora-2, .shimmer-text, .marquee-track { animation: none; }
+  .btn-shine:hover::after { animation: none; }
+}
+
+/* The split-word masks wrap each word, and background-clip:text does not reach through wrappers,
+   so the gradient must live on the words themselves as well as on the parent span. */
+.shimmer-text, .shimmer-text * {
+  background-image: linear-gradient(100deg, #38bdf8 0%, #60a5fa 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #60a5fa 85%, #38bdf8 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.shimmer-text * { animation: textShimmer 5s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .shimmer-text * { animation: none; } }
+
+/* SplitText masks each word with overflow:clip, which trims descenders (p, y, g) at the line box.
+   overflow-clip-margin widens the clip region without shifting layout. */
+.split-heading div { overflow-clip-margin: 0.2em; }

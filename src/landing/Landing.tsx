@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion, useScroll, useSpring } from 'motion/react';
 import { Menu, Sparkles, X } from 'lucide-react';
 import Hero from './Hero';
+import { Marquee, Stats, XRay } from './Showpieces';
+import { ScrollTrigger, scrollToId, scrollToTop, startSmoothScroll } from './motionKit';
 import ScrollAudit from './ScrollAudit';
 import { Agencies, Deliverable, Faq, FinalCta, Features, Problem } from './Sections';
 
@@ -11,10 +13,6 @@ const LINKS = [
   { href: '#agencies', label: 'Agencies' },
   { href: '#faq', label: 'FAQ' }
 ];
-
-function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
 
 function Logo() {
   return (
@@ -45,8 +43,13 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Landing is a long page; the app shell locks nothing, but the browser may restore a stale scroll offset.
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  // Smooth scrolling for the whole page, plus a layout refresh once web fonts have settled.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const stop = startSmoothScroll();
+    document.fonts?.ready.then(() => ScrollTrigger.refresh());
+    return stop;
+  }, []);
 
   const go = (href: string) => {
     setMenu(false);
@@ -63,7 +66,7 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
         <header className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${scrolled || menu ? 'border-b border-white/10 bg-slate-950/80 backdrop-blur-xl' : 'border-b border-transparent'}`}>
           <motion.div className="absolute bottom-0 left-0 h-px w-full origin-left bg-gradient-to-r from-sky-400 to-emerald-400" style={{ scaleX: progress }} aria-hidden />
           <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8" aria-label="Main">
-            <a href="/" aria-label="SEO Scan Pro home" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}><Logo /></a>
+            <a href="/" aria-label="SEO Scan Pro home" onClick={(e) => { e.preventDefault(); scrollToTop(); }}><Logo /></a>
             <ul className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
               {LINKS.map((l) => (
                 <li key={l.href}>
@@ -104,8 +107,11 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
 
         <main id="main">
           <Hero onGetStarted={onGetStarted} onSeeHow={() => scrollToId('how')} />
+          <Marquee />
           <Problem />
+          <XRay />
           <Features />
+          <Stats />
           <ScrollAudit />
           <Deliverable />
           <Agencies onGetStarted={onGetStarted} />

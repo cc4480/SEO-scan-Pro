@@ -4,6 +4,7 @@ import {
   Activity, ArrowRight, Bot, ChevronDown, EyeOff, FileWarning, Globe, Palette, ShieldCheck, Sparkles, Users, Wand2
 } from 'lucide-react';
 import { Reveal, SectionHeading } from './Reveal';
+import { Magnetic, SpotlightCard, SplitHeading } from './primitives';
 
 const CARD = 'group relative h-full rounded-2xl border border-white/10 bg-white/[0.04] p-6 transition duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.07]';
 
@@ -20,11 +21,11 @@ export function Problem() {
         <div className="mt-14 grid gap-5 md:grid-cols-3">
           {items.map((it, i) => (
             <Reveal key={it.title} delay={i * 0.1} className="h-full">
-              <div className={CARD}>
+              <SpotlightCard className={CARD}>
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-400/10 text-rose-300"><it.Icon className="h-5 w-5" /></span>
                 <h3 className="mt-5 text-lg font-bold text-white">{it.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-300">{it.body}</p>
-              </div>
+              </SpotlightCard>
             </Reveal>
           ))}
         </div>
@@ -53,11 +54,11 @@ export function Features() {
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((it, i) => (
             <Reveal key={it.title} delay={(i % 3) * 0.08} className="h-full">
-              <div className={CARD}>
+              <SpotlightCard className={CARD}>
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400/20 to-emerald-400/20 text-sky-200"><it.Icon className="h-5 w-5" /></span>
                 <h3 className="mt-5 text-lg font-bold text-white">{it.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-300">{it.body}</p>
-              </div>
+              </SpotlightCard>
             </Reveal>
           ))}
         </div>
@@ -87,11 +88,11 @@ export function Deliverable() {
           {steps.map((s, i) => (
             <li key={s.n}>
               <Reveal delay={i * 0.1} className="h-full">
-                <div className={CARD}>
+                <SpotlightCard className={CARD}>
                   <span className="font-mono text-sm font-bold text-emerald-300">{s.n}</span>
                   <h3 className="mt-3 text-xl font-bold text-white">{s.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-300">{s.body}</p>
-                </div>
+                </SpotlightCard>
               </Reveal>
             </li>
           ))}
@@ -116,7 +117,7 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-14 items-center">
         <Reveal>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">For agencies and freelancers</p>
-          <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-white text-balance">Turn audits into a lead machine</h2>
+          <SplitHeading as="h2" className="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-white text-balance">Turn audits into a lead machine</SplitHeading>
           <p className="mt-5 text-base sm:text-lg text-slate-300 leading-relaxed">
             Put a free-audit form on your website. Every prospect who runs a scan becomes a lead with their site already analysed,
             so your first conversation starts with their real problems.
@@ -126,12 +127,12 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
               <li key={t} className="flex gap-3"><Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-sky-300" />{t}</li>
             ))}
           </ul>
-          <button
+          <div className="mt-8"><Magnetic><button
             type="button" onClick={onGetStarted}
-            className="group mt-8 inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-6 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+            className="btn-shine group relative overflow-hidden inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-6 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
           >
             Set up my agency workspace <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </button>
+          </button></Magnetic></div>
         </Reveal>
 
         <Reveal delay={0.15}>
@@ -208,16 +209,16 @@ export function Faq() {
 export function FinalCta({ onGetStarted }: { onGetStarted: () => void }) {
   return (
     <section className="relative py-20 sm:py-28 overflow-hidden">
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] rounded-full bg-blue-600/25 blur-[130px]" aria-hidden />
+      <div className="aurora absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] rounded-full bg-blue-600/25 blur-[130px]" aria-hidden />
       <Reveal className="relative max-w-3xl mx-auto px-4 text-center">
-        <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white text-balance">See what your site looks like to search engines and AI</h2>
+        <SplitHeading as="h2" className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white text-balance">See what your site looks like to search engines and AI</SplitHeading>
         <p className="mt-5 text-lg text-slate-300">Create an account, paste a URL, and watch the audit run.</p>
-        <button
+        <div className="mt-9"><Magnetic><button
           type="button" onClick={onGetStarted}
-          className="group mt-9 inline-flex min-h-[52px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-8 text-base font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 hover:shadow-blue-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+          className="btn-shine group relative overflow-hidden inline-flex min-h-[52px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-8 text-base font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 hover:shadow-blue-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
         >
           Run my first audit <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-        </button>
+        </button></Magnetic></div>
       </Reveal>
     </section>
   );

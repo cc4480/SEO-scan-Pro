@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Scan, WhiteLabelSettings, ProgressEvent } from './types';
 import ScanForm from './components/ScanForm';
 import ReportDashboard from './components/ReportDashboard';
@@ -10,7 +10,8 @@ import CompetitorBenchmark from './components/CompetitorBenchmark';
 import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
 import ScanRunningPanel from './components/ScanRunningPanel';
-import Landing from './landing/Landing';
+// The landing page carries the animation libraries; signed-in users never download them.
+const Landing = lazy(() => import('./landing/Landing'));
 import { motion } from 'motion/react';
 import { EMAIL_VERIFIED_EVENT } from './components/VerifyLinkNotice';
 import LoginForm from './components/Auth/LoginForm';
@@ -221,7 +222,11 @@ export default function App() {
       window.scrollTo(0, 0);
     };
     if (showLanding && authMode === 'login') {
-      return <Landing onGetStarted={() => openAuth('register')} onSignIn={() => openAuth('login')} />;
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+          <Landing onGetStarted={() => openAuth('register')} onSignIn={() => openAuth('login')} />
+        </Suspense>
+      );
     }
     const backToHome = () => {
       setShowLanding(true);
