@@ -1,3 +1,4 @@
+import { notify } from '../ui/notify';
 import React, { useState } from 'react';
 import { Award, RefreshCw, Send, Sparkles, CheckSquare } from 'lucide-react';
 import { waitForWidgetScan } from '../widgetScan';
@@ -28,7 +29,7 @@ export default function EmbedView() {
     if (!url.trim() || !email.trim()) return;
 
     if (!widgetKey) {
-      alert('This widget is not correctly configured (missing key). Please contact the site owner.');
+      notify('This widget is not correctly configured (missing key). Please contact the site owner.');
       return;
     }
 
@@ -58,7 +59,7 @@ export default function EmbedView() {
 
       const data = await response.json();
       if (!response.ok) {
-        alert(data.error || 'Widget audit engine halted temporarily.');
+        notify(data.error || 'Widget audit engine halted temporarily.');
         return;
       }
 
@@ -67,13 +68,13 @@ export default function EmbedView() {
       const finished = await waitForWidgetScan(data.scanId, setStatusMessage);
 
       if (!finished || finished.status !== 'COMPLETED') {
-        alert('The audit is still running on the server. Please try again in a moment.');
+        notify('The audit is still running on the server. Please try again in a moment.', 'info');
         return;
       }
 
       setTestResult({ ...data, ...finished });
     } catch {
-      alert('Network timeout running widget audit.');
+      notify('Network timeout running widget audit.');
     } finally {
       clearInterval(interval);
       setIsCrawlLoading(false);

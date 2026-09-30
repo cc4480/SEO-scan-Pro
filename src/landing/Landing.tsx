@@ -124,6 +124,8 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
             <Logo />
             <p>&copy; {new Date().getFullYear()} SEO Scan Pro. Enterprise SEO audits, in one scan.</p>
             <div className="flex gap-5">
+              <a href="/terms" className="hover:text-white">Terms</a>
+              <a href="/privacy" className="hover:text-white">Privacy</a>
               <button type="button" onClick={onSignIn} className="hover:text-white">Sign in</button>
               <button type="button" onClick={onGetStarted} className="hover:text-white">Create account</button>
             </div>

@@ -21,6 +21,9 @@ import { toCsv, scanToRow, SCAN_CSV_COLUMNS } from './lib/exporters';
 import { getProgress } from './lib/progress';
 import { assertPublicUrl, SsrfBlockedError } from './lib/ssrfGuard';
 import { renderHtmlToPdf } from './lib/pdf';
+import { dailyScanLimit, scansInLast24h } from './lib/dailyQuota';
+import { loadIndexTemplate, renderIndex, INDEXABLE_PATHS } from './lib/indexHtml';
+import { contentSecurityPolicy } from './lib/csp';
 import { Scan, WhiteLabelSettings } from './src/types';
 import { buildAgentReadyPrompt } from './src/agentPrompt';
 
@@ -41,6 +44,16 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts. Please try again in 15 minutes.' }
+});
+
+// Account creation is the abuse entry point for everything that costs money (scans, email). The
+// shared auth limiter is per-attempt; this one caps how many accounts a single network can open.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: isTestEnv ? 100000 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created from this network. Please try again later.' }
 });
 
 const widgetLimiter = rateLimit({
@@ -147,7 +160,7 @@ export function createApp() {
   // ===== AUTHENTICATION ENDPOINTS =====
 
   // Register endpoint
-  app.post('/api/auth/register', authLimiter, validateBody(registerSchema), async (req, res) => {
+  app.post('/api/auth/register', registerLimiter, authLimiter, validateBody(registerSchema), async (req, res) => {
     try {
       const { email, password, name } = req.body;
 
@@ -354,9 +367,16 @@ export function createApp() {
     );
   });
   app.get('/sitemap.xml', (req, res) => {
+    const urls = INDEXABLE_PATHS.map((p) => `  <url><loc>${publicOrigin()}${p}</loc></url>`).join('\n');
     res.type('application/xml').send(
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${publicOrigin()}/</loc></url>\n</urlset>\n`
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
     );
+  });
+
+  // Non-secret deployment facts the legal pages need. SUPPORT_EMAIL is optional; without it the
+  // pages simply omit the contact line rather than invent one.
+  app.get('/api/public-config', (req, res) => {
+    res.json({ supportEmail: process.env.SUPPORT_EMAIL || null });
   });
 
   // ===== PROTECTED ENDPOINTS (Require Authentication) =====
@@ -682,6 +702,12 @@ export function createApp() {
         return res.status(429).json({ error: `You already have ${backlog} scans in progress. Wait for some to finish before starting more.` });
       }
 
+      // Daily allowance: the burst limits above do not stop a slow drip from one account.
+      const usedToday = await scansInLast24h(req.userId!);
+      if (usedToday >= dailyScanLimit()) {
+        return res.status(429).json({ error: `You have reached today's limit of ${dailyScanLimit()} scans. It resets on a rolling 24-hour basis.`, code: 'DAILY_LIMIT' });
+      }
+
       const newScan = await prisma.scan.create({
         data: {
           url,
@@ -981,11 +1007,29 @@ export function createApp() {
     }
   });
 
+  // Unknown API routes answer JSON, not the SPA's HTML page.
+  app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+
+  // Last-resort error handler: malformed JSON is the caller's fault (400), everything else is
+  // logged with its request and answered without leaking internals.
+  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON' });
+    if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'Request body is too large' });
+    console.error(`[error] ${req.method} ${req.originalUrl}:`, err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: 'Internal server error' });
+  });
+
   return app;
 }
 
 async function startServer() {
   validateEnv();
+
+  // A stray rejection should be visible in the logs but must not take the server down; a truly
+  // uncaught exception leaves the process in an unknown state, so log it and exit for a clean restart.
+  process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
+  process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); process.exit(1); });
 
   const app = createApp();
 
@@ -1011,7 +1055,18 @@ async function startServer() {
     // A browser that loaded it while the Vite dev server was running holds an entry
     // pointing at /src/main.tsx; if that stale HTML is reused against this server the
     // module request returns HTML instead of JS and the app renders a blank page.
+    const indexTemplate = loadIndexTemplate(distPath);
+    const sendIndex = (req: express.Request, res: express.Response) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.type('html').send(renderIndex(indexTemplate, process.env.APP_URL || `http://localhost:${PORT}`, req.path));
+    };
+    // App shell responses (HTML, static files) get a CSP; the JSON API and report downloads do not.
+    app.use((req, res, next) => {
+      if (!req.path.startsWith('/api')) res.setHeader('Content-Security-Policy', contentSecurityPolicy(req.path));
+      next();
+    });
     app.use(express.static(distPath, {
+      index: false,
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('index.html')) {
           res.setHeader('Cache-Control', 'no-store');
@@ -1020,10 +1075,7 @@ async function startServer() {
         }
       }
     }));
-    app.get('*', (req, res) => {
-      res.setHeader('Cache-Control', 'no-store');
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', sendIndex);
   }
 
   // Bind without an explicit host so Node listens dual-stack (`::`, which also accepts

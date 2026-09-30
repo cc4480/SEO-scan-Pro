@@ -1,3 +1,4 @@
+import { notify } from '../ui/notify';
 import { motion } from 'motion/react';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import React, { useState } from 'react';
@@ -110,7 +111,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       setPromptCopied(true);
       setTimeout(() => setPromptCopied(false), 2200);
     } else {
-      alert('Copying was blocked by the browser. Select the text below and copy it manually.');
+      notify('Copying was blocked by the browser. Select the text below and copy it manually.');
     }
   };
 
@@ -128,7 +129,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       );
 
       if (!res.ok) {
-        alert(`Could not download the report (HTTP ${res.status}). Please try again.`);
+        notify(`Could not download the report (HTTP ${res.status}). Please try again.`);
         return;
       }
 
@@ -147,7 +148,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       link.remove();
       URL.revokeObjectURL(objectUrl);
     } catch {
-      alert('Could not download the report — the request failed.');
+      notify('Could not download the report — the request failed.');
     } finally {
       setDownloading(null);
     }

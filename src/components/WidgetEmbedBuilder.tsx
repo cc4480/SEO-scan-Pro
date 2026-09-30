@@ -1,3 +1,4 @@
+import { notify } from '../ui/notify';
 import React, { useState } from 'react';
 import { Code, Share2, Copy, Check, Sparkles, Mail, Send, Award } from 'lucide-react';
 import { waitForWidgetScan } from '../widgetScan';
@@ -24,7 +25,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
   const copyCode = async () => {
     const ok = await copyText(embedCode);
     if (!ok) {
-      alert('Copying was blocked by the browser. Select the code and copy it manually.');
+      notify('Copying was blocked by the browser. Select the code and copy it manually.');
       return;
     }
     setCopied(true);
@@ -48,7 +49,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || 'Widget processing halted temporarily.');
+        notify(data.error || 'Widget processing halted temporarily.');
         return;
       }
 
@@ -57,13 +58,13 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
       const finished = await waitForWidgetScan(data.scanId, setStatusMessage);
 
       if (!finished || finished.status !== 'COMPLETED') {
-        alert('The audit is still running on the server. Please try again in a moment.');
+        notify('The audit is still running on the server. Please try again in a moment.', 'info');
         return;
       }
 
       setTestResult({ ...data, ...finished });
     } catch {
-      alert('Network timeout running widget audit.');
+      notify('Network timeout running widget audit.');
     } finally {
       setIsCrawlLoading(false);
       setStatusMessage('');

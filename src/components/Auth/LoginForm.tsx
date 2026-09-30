@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LegalLinks } from '../../legal/LegalPage';
 import { LogIn, Mail, Lock, AlertCircle, Loader } from 'lucide-react';
 
 interface LoginFormProps {
@@ -135,7 +136,7 @@ export default function LoginForm({ onLoginSuccess, onSwitchToRegister, onSwitch
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-500 mt-8">
-          Your data stays private to your account
+          <LegalLinks />
         </p>
       </div>
     </div>

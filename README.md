@@ -72,6 +72,8 @@ Set these variables on the service (see `.env.example` for all of them):
 | `DEEPSEEK_API_KEY` | Without it every report comes from the offline fallback generator. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Without them password reset and alerts cannot send. |
 | `TRUST_PROXY_HOPS` | Default `1` (Railway edge). Use `2` if Cloudflare also proxies in front; wrong values make per-IP rate limits share or forge the client IP. |
+| `SUPPORT_EMAIL` | Optional. Contact address shown on the Terms and Privacy pages. |
+| `DAILY_SCAN_LIMIT` | Optional. Manual scans per account per rolling 24 hours (default 25). |
 
 **Email verification:** new accounts must confirm their address (emailed link, valid 24h) before they can start scans, create monitors or API keys, and an unconfirmed owner's embed widget is inactive. This is enforced only when `RESEND_API_KEY` and `EMAIL_FROM` are both set — without a provider nobody could receive the link, so nothing is gated. Accounts that existed before the feature are grandfathered as verified. Changing an account's email un-verifies it.
 
@@ -80,6 +82,10 @@ Set these variables on the service (see `.env.example` for all of them):
 Leave `RETURN_RESET_LINK_IN_RESPONSE` **unset**. Run exactly **one** replica: the scan queue and monitor scheduler are in-process. On SIGTERM (every redeploy) the server stops the scheduler, drains HTTP, closes Chromium and the database.
 
 Local check of the image: `docker build -t seoscan .` then `docker run --rm -p 3000:3000 --env-file .env seoscan`.
+
+**Legal and SEO:** `/terms` and `/privacy` are public pages (text in `src/legal/content.ts` — have it reviewed for your jurisdiction before launch). The server fills canonical and social-card URLs from `APP_URL`, and sends a Content-Security-Policy on every app page in production (`lib/csp.ts`).
+
+**Deploying this service:** the Railway `web` service has no GitHub source connected, so a push to `main` does not deploy. Run `railway up --service web` from this folder, or connect the repository in the Railway dashboard. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full launch checklist, including the steps that need an account or a decision.
 
 ## Scripts
 

@@ -1,3 +1,4 @@
+import { notify } from '../ui/notify';
 import React, { useState } from 'react';
 import { WhiteLabelSettings } from '../types';
 import { copyText } from '../clipboard';
@@ -40,7 +41,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
     if (!settings.webhookSecret) return;
     const ok = await copyText(settings.webhookSecret);
     if (!ok) {
-      alert('Copying was blocked by the browser. Select the secret and copy it manually.');
+      notify('Copying was blocked by the browser. Select the secret and copy it manually.');
       return;
     }
     setSecretCopied(true);

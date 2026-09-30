@@ -1,3 +1,4 @@
+import { notify } from './ui/notify';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Scan, WhiteLabelSettings, ProgressEvent } from './types';
 import ScanForm from './components/ScanForm';
@@ -11,8 +12,10 @@ import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
 import ScanRunningPanel from './components/ScanRunningPanel';
 import AnimatedNumber from './ui/AnimatedNumber';
+import LegalPage from './legal/LegalPage';
 // The landing page carries the animation libraries; signed-in users never download them.
 const Landing = lazy(() => import('./landing/Landing'));
+
 import { motion } from 'motion/react';
 import { EMAIL_VERIFIED_EVENT } from './components/VerifyLinkNotice';
 import LoginForm from './components/Auth/LoginForm';
@@ -202,6 +205,11 @@ export default function App() {
     return <EmbedView />;
   }
 
+  // Terms and Privacy are public pages on real URLs, reachable signed in or out.
+  const pathname = window.location.pathname;
+  const legalKind = pathname === '/terms' || pathname === '/terms/' ? 'terms' : pathname === '/privacy' || pathname === '/privacy/' ? 'privacy' : null;
+  if (legalKind) return <LegalPage kind={legalKind} />;
+
   // Show loading state while checking auth
   if (isCheckingAuth) {
     return (
@@ -334,7 +342,7 @@ export default function App() {
         // Only surface this while the user is still signed in — otherwise the message would pop
         // up over the login screen after a logout mid-scan.
         if (localStorage.getItem('token')) {
-          alert('The audit is still running on the server. It will appear in your history list once it finishes.');
+          notify('The audit is still running on the server. It will appear in your history list once it finishes.', 'info');
         }
         return;
       }
@@ -342,10 +350,10 @@ export default function App() {
       setActiveScan(finished);
 
       if (finished.status === 'FAILED') {
-        alert('The audit failed. The target site may be unreachable, or it blocked the automated crawler.');
+        notify('The audit failed. The target site may be unreachable, or it blocked the automated crawler.');
       }
     } catch (err: any) {
-      alert(`SEO Audit Pipeline Halted: ${err?.message || 'Server timeout'}`);
+      notify(`${err?.message || 'The scan could not be started.'}`);
     } finally {
       setIsCrawlLoading(false);
     }
@@ -364,10 +372,10 @@ export default function App() {
         const data = await res.json();
         setSettings(data.settings);
       } else {
-        alert('Could not update brand presets.');
+        notify('Could not update brand presets.');
       }
     } catch {
-      alert('Network failure saving branding options.');
+      notify('Network failure saving branding options.');
     } finally {
       setIsSavingSettings(false);
     }
@@ -382,13 +390,13 @@ export default function App() {
         headers: getAuthHeaders()
       });
       if (!res.ok) {
-        alert('Failed to delete scan.');
+        notify('Failed to delete scan.');
         return;
       }
       if (activeScan?.id === scanId) setActiveScan(null);
       await loadDatabase();
     } catch {
-      alert('Network failure deleting scan.');
+      notify('Network failure deleting scan.');
     }
   };
 
@@ -397,13 +405,13 @@ export default function App() {
     try {
       const res = await fetch(`/api/scans/${scanId}`, { headers: getAuthHeaders() });
       if (!res.ok) {
-        alert('Could not open that scan.');
+        notify('Could not open that scan.');
         return;
       }
       setActiveScan(await res.json());
       setActiveTab('audit');
     } catch {
-      alert('Network failure opening scan.');
+      notify('Network failure opening scan.');
     }
   };
 
@@ -413,7 +421,7 @@ export default function App() {
     try {
       await downloadWithAuth(`/api/scans/export?${params.toString()}`, `seo_scans.${format}`);
     } catch (err: any) {
-      alert(`Export failed: ${err?.message || 'unknown error'}`);
+      notify(`Export failed: ${err?.message || 'unknown error'}`);
     }
   };
 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LegalLinks } from '../../legal/LegalPage';
 import { UserPlus, Mail, Lock, User, AlertCircle, Loader } from 'lucide-react';
 
 interface RegisterFormProps {
@@ -173,8 +174,8 @@ export default function RegisterForm({ onRegisterSuccess, onSwitchToLogin }: Reg
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-8">
-          Your data stays private to your account
+        <p className="text-center text-xs text-slate-400 mt-8">
+          By creating an account you agree to our <LegalLinks />.
         </p>
       </div>
     </div>
