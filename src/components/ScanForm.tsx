@@ -117,6 +117,11 @@ export default function ScanForm({ onScanSubmit, isLoading, auditEvents = [], de
             Deep Site Crawl
           </button>
         </div>
+        <p className="-mt-1 text-[11px] leading-snug text-slate-400">
+          {mode === 'SINGLE'
+            ? 'A single page usually takes 20–45 seconds. The AI analysis alone takes 10–25 seconds.'
+            : 'A deep crawl takes longer: it reads each extra page (up to 5) on top of the AI analysis, and slow sites take longer to load.'}
+        </p>
 
         {/* Crawl Settings */}
         {mode === 'FULL_SITE' && (

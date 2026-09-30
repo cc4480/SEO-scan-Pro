@@ -74,6 +74,7 @@ export default function Hero({ onGetStarted, onSeeHow }: { onGetStarted: () => v
             className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400"
           >
             <li>Real-browser rendering</li>
+            <li>Most audits finish in under a minute</li>
             <li>Live, event-by-event audit log</li>
             <li>White-label PDF reports</li>
           </motion.ul>

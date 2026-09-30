@@ -77,7 +77,7 @@ export function Features() {
 export function Deliverable() {
   const steps = [
     { n: '01', title: 'Paste a URL', body: 'Pick a single page or a deep crawl. Nothing to install and no code on your site.' },
-    { n: '02', title: 'Watch it run', body: 'A live audit log shows each request and measurement as the scanner makes it.' },
+    { n: '02', title: 'Watch it run', body: 'A live audit log shows each request and measurement as it happens. A single page usually takes 20–45 seconds; bigger or slower sites take longer.' },
     { n: '03', title: 'Ship the fixes', body: 'Get scored findings, remediation steps, a branded report, and a prompt you can paste into your coding agent.' }
   ];
   return (
@@ -159,6 +159,7 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
 
 const FAQS = [
   { q: 'What does an audit check?', a: 'Thirteen stages: URL validation, robots.txt and sitemap, llms.txt, page rendering, meta tags, headings and content depth, images and alt text, links (with a broken-link sample), structured data, security headers, performance and lab Core Web Vitals, then the AI analysis and the agent-ready prompt.' },
+  { q: 'How long does an audit take?', a: 'It depends on the size and complexity of the site. A single page usually finishes in 20–45 seconds, and most of that is the AI writing the analysis (10–25 seconds). A deep crawl reads up to five pages, so it takes longer, and slow or heavy sites take longer still because the scanner waits for them to load. You can watch every step live while it runs.' },
   { q: 'Does it work on JavaScript-heavy sites?', a: 'Yes. Pages are loaded in a real headless browser, so content rendered by JavaScript is analysed, not just the initial HTML.' },
   { q: 'Is the AI required?', a: 'The analysis uses DeepSeek. If it is unavailable, a deterministic local report is generated from the crawl statistics so the workflow never breaks, and the saved audit log records which one you got.' },
   { q: 'What happens to the URLs I scan?', a: 'The scanner fetches the public page and its supporting files. A structured summary of what it found is sent to DeepSeek to write the analysis. Private and internal addresses are refused.' },
