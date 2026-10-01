@@ -2,6 +2,7 @@ import { CrawlResult, DeepSeekSeoReport } from '../src/types';
 import { buildAgentReadyPrompt } from '../src/agentPrompt';
 import { clip, heartbeat, noopEmit, type Emit } from './progress';
 import { deepseekModelConfig } from './deepseekModel';
+import { finalizeReport } from './audit/finalize';
 
 const apiKey = process.env.DEEPSEEK_API_KEY;
 const { baseUrl: DEEPSEEK_BASE_URL, model: DEEPSEEK_MODEL, extra: DEEPSEEK_EXTRA } = deepseekModelConfig();
@@ -36,7 +37,7 @@ export async function generateSeoReport(crawl: CrawlResult, emit: Emit = noopEmi
 
   if (!key) {
     emit('ai', 'warn', 'DEEPSEEK_API_KEY is not configured: using the OFFLINE generator (rule-based, no AI model involved)');
-    const offline = generateSimulatorReport(crawl);
+    const offline = finalizeReport(generateSimulatorReport(crawl), crawl);
     emitReportSummary(offline, 'brief built locally by the deterministic builder', emit);
     return offline;
   }
@@ -74,6 +75,18 @@ export async function generateSeoReport(crawl: CrawlResult, emit: Emit = noopEmi
       wordCount: crawl.mainPage.wordCount,
       webVitals: crawl.mainPage.webVitals
     },
+    // Measured evidence (lib/audit): what the site really contains and allows. Treat as ground truth.
+    measured: crawl.facts ? {
+      crawlerAccess: crawl.facts.botAccess?.results.map(r => ({ crawler: r.name, role: r.role, httpStatus: r.status, blocked: r.blocked, robotsTxtAllows: r.robotsAllows })),
+      rawHtmlVsRendered: crawl.facts.rawVsRendered,
+      structuredDataEntities: crawl.facts.schema?.entities.map(e => ({ type: e.type, properties: e.props, offers: e.prices, softwareVersion: e.version, totalTime: e.totalTime, hasAggregateRating: e.hasRating, hasReview: e.hasReview })),
+      structuredDataNotVisibleOnPage: crawl.facts.schema?.invisible,
+      visibleSections: crawl.facts.signals?.sections,
+      pricesVisibleOnPage: crawl.facts.signals?.prices,
+      genuineReviewsVisible: crawl.facts.signals?.hasVisibleReviews,
+      multiLanguage: crawl.facts.signals?.multiLanguage
+    } : undefined,
+    imagesOnPage: crawl.mainPage.images.total,
     additionalPagesSummary: crawl.additionalPages.map(page => ({
       url: page.url,
       loadTimeMs: page.loadTimeMs,
@@ -104,6 +117,12 @@ EVIDENCE RULES — the payload above is your ONLY source of truth. You have no o
 - brokenLinks comes from a SAMPLE of linksChecked links, not the whole site. Report those exact links; do not extrapolate a site-wide broken-link count.
 - webVitals are lab measurements from the auditing host, not real-user field data; label them as such and never present them as the site's Core Web Vitals assessment.
 - robotsBlocksAll === true means robots.txt disallows every crawler from the whole site: that is a critical issue. A redirectChain longer than 2 entries means multiple redirect hops before the final page.
+- The "measured" object is ground truth from direct requests and parsing. Before recommending anything, check it against "measured" and the rest of the payload, and OMIT the recommendation if the site already does it. In particular: structuredDataEntities lists the properties each schema entity really has (e.g. do not ask for applicationCategory, operatingSystem, offers or totalTime when they are listed); visibleSections says which sections the page already has (never ask to "add" a pricing, FAQ, how-it-works or feature section that visibleSections shows as present); imagesOnPage of 0 means there is no alt text to fix.
+- NEVER recommend aggregateRating, Review or star-rating markup unless genuineReviewsVisible is true. NEVER put an example price in a recommendation: the only prices you may mention are in pricesVisibleOnPage or structuredDataEntities.offers, and otherwise say "use the price shown on the page".
+- FAQ rich results no longer appear in Google Search and HowTo rich results were deprecated earlier. FAQPage and HowTo markup is still valid and can help machines, but never tell the reader to validate it in Google's Rich Results Test or to expect a rich result.
+- rawHtmlVsRendered compares what a plain request returns with what a browser renders. If most content or any schema type exists only after JavaScript, say so, and say it is "commonly reported" (not tested per crawler) that many AI retrieval crawlers do not run JavaScript.
+- crawlerAccess is a real test per crawler. A blocked training crawler (GPTBot, ClaudeBot, CCBot, Bytespider) is the site owner's policy decision, not an error, unless robotsTxtAllows says otherwise; blocked search or assistant crawlers are a real problem. Only count real <a href> links as internal links; navigation made of buttons is invisible to crawlers.
+- Scores you write are discarded and recomputed from measurements; do not defend or explain numbers, concentrate on accurate findings.
 - Judge the sample for what it is: a single-page crawl plus at most a few subpages. Do not generalise a page-level nit into a site-wide verdict.
 
 IMPORTANT: If "isSimulatedData" is true, the site could not actually be reached or crawled (offline, blocked, or timed out), and the payload above is placeholder data, NOT a real crawl of the site. In that case you MUST open the executiveSummary with a clear statement that live data could not be retrieved and these findings are illustrative only, not an actual audit of the target site.
@@ -169,28 +188,23 @@ Respond with a single valid JSON object (no markdown fences, no commentary) matc
     // JSON mode normally returns bare JSON, but defensively strip any markdown fences.
     reportText = reportText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
 
-    const parsedReport = JSON.parse(reportText) as DeepSeekSeoReport;
+    const draftReport = JSON.parse(reportText) as DeepSeekSeoReport;
 
     // The agent hand-off prompt is the payoff of the report, so never leave the user
     // without one if the model omitted or malformed it — fall back to the deterministic
     // builder, which derives the same structure from the fixes we already have.
     emit('ai', 'ok', 'response is valid JSON and matches the report shape');
-    const modelWrotePrompt = !!parsedReport.agentReadyPrompt?.prompt;
-    if (!parsedReport.agentReadyPrompt?.prompt) {
-      parsedReport.agentReadyPrompt = buildAgentReadyPrompt({
-        url: crawl.rootUrl,
-        score: parsedReport.score,
-        criticalIssues: parsedReport.criticalIssues ?? [],
-        recommendedFixes: parsedReport.recommendedFixes ?? [],
-        aeoAssessment: parsedReport.aeoAssessment,
-        executiveSummary: parsedReport.executiveSummary,
-        isSimulated: crawl.hasSimulatedData
-      });
-    }
+    // Check the written report against what was measured: drop what the evidence contradicts, add
+    // what it proves, compute the scores, and rebuild the hand-off prompt from the result.
+    const parsedReport = finalizeReport(draftReport, crawl);
+    for (const r of parsedReport.qa?.removed ?? []) emit('ai', 'warn', `removed an unsupported suggestion "${clip(r.title, 60)}": ${clip(r.reason, 100)}`);
+    for (const a of parsedReport.qa?.added ?? []) emit('ai', 'info', `added a measured finding: ${a}`);
+    if (parsedReport.scoreMethod === 'measured') emit('ai', 'ok', 'scores computed from the measured checks (no model-written numbers are used)');
+    const modelWrotePrompt = false;
 
     emitReportSummary(
       parsedReport,
-      modelWrotePrompt ? 'brief written by the model' : 'the model omitted the brief, so it was built locally',
+      'hand-off brief rebuilt from the checked report',
       emit
     );
     return parsedReport;

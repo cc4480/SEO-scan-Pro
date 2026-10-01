@@ -24,6 +24,7 @@ import { renderHtmlToPdf } from './lib/pdf';
 import { dailyScanLimit, scansInLast24h } from './lib/dailyQuota';
 import { loadIndexTemplate, renderIndex, INDEXABLE_PATHS } from './lib/indexHtml';
 import { contentSecurityPolicy } from './lib/csp';
+import { evidenceSectionHtml } from './lib/reportEvidence';
 import { mountBillingRoutes, mountStripeWebhook } from './lib/billingRoutes';
 import { billingEnabled, cancelSubscriptionNow } from './lib/billing';
 import { brandedSettings, denyFeature, denyMonitors, denyScanQuota, entitlementFor, entitlementForUserId, scansInLast30Days } from './lib/entitlements';
@@ -1275,6 +1276,8 @@ function generateReportHtml(scan: any, settings: any): string {
       <h2 class="text-xl font-bold mb-3" style="color: ${safeColor(settings?.primaryColor)}">Executive Summary</h2>
       <p class="text-slate-600 leading-relaxed text-sm">${escapeHtml(scan.seoReport?.executiveSummary || 'N/A')}</p>
     </div>
+
+    ${evidenceSectionHtml(scan, safeColor(settings?.primaryColor))}
 
     <div class="mb-8 p-6 rounded-2xl bg-slate-900 border border-slate-700">
       <h2 class="text-lg font-bold mb-1 text-emerald-400">${isEs ? 'Prompt Listo para Agente' : 'Agent-Ready Prompt'}</h2>

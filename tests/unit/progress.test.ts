@@ -157,13 +157,17 @@ describe('DeepSeek step logs which engine actually wrote the report', () => {
     const { events, emit } = collect();
     const out = await generate(crawl(), emit);
 
-    expect(out.score.overall).toBe(71);
+    // The model's own numbers (71) are discarded: scores are computed from the measured crawl.
+    expect(out.scoreMethod).toBe('measured');
+    expect(out.score.overall).not.toBe(71);
     const ai = events.filter((e) => e.stage === 'ai').map((e) => e.msg);
+    expect(ai.some((m) => /scores computed from the measured checks/.test(m))).toBe(true);
     expect(ai.some((m) => /sending .*KB crawl payload to deepseek-flash/.test(m))).toBe(true);
     expect(ai.some((m) => /DeepSeek accepted the request \(HTTP 200\) after/.test(m))).toBe(true);
     expect(ai.some((m) => /full report received after/.test(m))).toBe(true);
-    expect(ai.some((m) => m === 'scores: overall 71 · technical 60 · content 70 · AEO/GEO 80 · performance 90')).toBe(true);
-    expect(events.find((e) => e.stage === 'prompt' && e.level === 'ok')?.msg).toBe('brief written by the model (12 chars, 2 checklist item(s))');
+    expect(ai.some((m) => m === `scores: overall ${out.score.overall} · technical ${out.score.technical} · content ${out.score.content} · AEO/GEO ${out.score.aeoGeo} · performance ${out.score.performance}`)).toBe(true);
+    // The hand-off brief is rebuilt from the checked report so it cannot repeat anything that was removed.
+    expect(events.find((e) => e.stage === 'prompt' && e.level === 'ok')?.msg).toMatch(/^hand-off brief rebuilt from the checked report \(\d+ chars, \d+ checklist item\(s\)\)$/);
     expect(events.some((e) => /OFFLINE/.test(e.msg))).toBe(false);
   });
 

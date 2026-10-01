@@ -69,6 +69,17 @@ If a target site cannot be reached (offline, blocked, timed out, non-OK status),
 
 The AI prompt enforces strict evidence rules: every finding must be supported by the crawled payload; the model must **not** assert that something is absent unless the crawler actually verified its absence (e.g. `llms.txt`, schema types); a TTFB-dominated load time is reported as a network-bound measurement rather than a front-end performance failure; multiple `<h1>` elements are not raised as critical; decorative empty `alt` is treated as an accessibility item, not a ranking failure.
 
+### 2.3b Measured evidence and the accuracy check
+
+The AI writes the narrative, but it cannot look at the site, so every report is checked against what the scanner actually measured (`lib/audit`):
+
+- **Crawler access** — the home page is requested once per crawler with its published user agent (GPTBot, ClaudeBot, CCBot, Bytespider, OAI-SearchBot, Claude-SearchBot, PerplexityBot, Googlebot, Bingbot, Applebot, ChatGPT-User, Claude-User, Perplexity-User). A 401/403/406/429 while a normal request succeeds is "blocked", and any crawler that robots.txt allows but the site refuses is reported as a conflict. Blocking AI-*training* crawlers is treated as an owner policy decision; blocked search or assistant crawlers are a real problem.
+- **Raw HTML vs rendered** — words, real `<a href>` links and schema types are counted both in a plain no-JavaScript response and in the browser-rendered DOM, so JavaScript-dependent content, schema that only exists after scripts run, and navigation built from buttons are visible.
+- **Structured data contents** — each JSON-LD entity's real properties, offers and prices; HowTo steps and FAQ questions are compared with the visible text.
+- **Visible sections and prices** — which sections (pricing, FAQ, how it works…) the page has, and the prices it shows.
+- **The checker** — every AI suggestion is tested against that evidence. It is dropped, with the reason recorded and shown in the report, when it asks for something the page already has (schema properties, sections, files), for alt text on a page with no images, for hreflang on a single-language site, for rating/review markup without genuine reviews, for an invented price, or when it tells the reader to validate FAQ/HowTo markup in the Rich Results Test (those rich results no longer exist). Findings that need no judgement (blocked crawlers, JavaScript dependence, invisible markup) are added from the measurements.
+- **Scores are computed, not written** — `lib/audit/scoring.ts` starts each category at 100 and deducts for specific measured findings; every deduction is listed in the report, so a site always scores the same.
+
 ### 2.4 Offline fallback
 
 When no `DEEPSEEK_API_KEY` is configured, or when the DeepSeek call fails, the app generates a **deterministic local report** (`generateSimulatorReport`) from the crawl statistics, so the workflow never breaks.

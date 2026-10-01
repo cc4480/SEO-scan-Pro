@@ -123,6 +123,99 @@ export interface CrawlResult {
   duplicateDescriptions?: DuplicateGroup[];
   /** The full audit log of this scan: every request, measurement and fallback, in order. */
   log?: ProgressEvent[];
+  /** Measured evidence the report is checked against (see lib/audit). Absent on scans stored before it existed. */
+  facts?: AuditFacts;
+}
+
+// ---- Measured evidence ---------------------------------------------------------------------------
+// Everything below is observed directly (an HTTP request, a parse of the HTML), never written by a
+// model. The report's scores and its fix list are checked against it.
+
+export type BotRole = 'training' | 'search' | 'assistant';
+
+export interface BotAccessResult {
+  name: string;
+  role: BotRole;
+  /** HTTP status the site returned to this crawler's published user agent; 0 = the request failed. */
+  status: number;
+  /** 401/403/406/429 or a failed request while a normal browser got through. */
+  blocked: boolean;
+  /** What robots.txt says for this crawler on "/"; null when robots.txt could not be read. */
+  robotsAllows: boolean | null;
+}
+
+export interface BotAccess {
+  checkedUrl: string;
+  /** Status a plain browser-style request got, the baseline each crawler is compared against. */
+  baselineStatus: number;
+  results: BotAccessResult[];
+  /** Crawlers robots.txt welcomes but the site refuses at the network layer (e.g. a CDN bot rule). */
+  conflicts: string[];
+}
+
+export interface RawVsRendered {
+  /** Plain HTTP fetch, no JavaScript: what a crawler that does not run scripts receives. */
+  rawStatus: number;
+  rawBytes: number;
+  rawWords: number;
+  rawLinks: number;
+  rawSchemaTypes: string[];
+  /** After a real browser ran the page's JavaScript. */
+  renderedWords: number;
+  renderedLinks: number;
+  renderedSchemaTypes: string[];
+  /** Schema types that exist only after JavaScript runs. */
+  schemaOnlyAfterJs: string[];
+  /** <button>s inside header/nav/footer: navigation a crawler cannot follow. */
+  navButtons: number;
+  navAnchors: number;
+}
+
+export interface SchemaEntity {
+  type: string;
+  /** Property names present on this entity. */
+  props: string[];
+  prices: Array<{ price: string; currency: string }>;
+  version?: string;
+  totalTime?: string;
+  stepNames: string[];
+  questions: string[];
+  hasRating: boolean;
+  hasReview: boolean;
+}
+
+export interface SchemaFacts {
+  entities: SchemaEntity[];
+  /** Schema items (HowTo steps, FAQ questions) whose text is not on the visible page. */
+  invisible: Array<{ type: string; items: string[]; total: number }>;
+}
+
+export interface ContentSignals {
+  /** Section presence read from the rendered page's headings, navigation and text. */
+  sections: { pricing: boolean; faq: boolean; howItWorks: boolean; features: boolean; about: boolean; contact: boolean; reviews: boolean };
+  /** Dollar amounts visible on the page; the only prices a recommendation may mention. */
+  prices: string[];
+  hasVisibleReviews: boolean;
+  multiLanguage: boolean;
+}
+
+export interface AuditFacts {
+  botAccess?: BotAccess;
+  rawVsRendered?: RawVsRendered;
+  schema?: SchemaFacts;
+  signals?: ContentSignals;
+}
+
+export interface ScoreDeduction {
+  points: number;
+  reason: string;
+}
+
+export interface ScoreBreakdown {
+  technical: ScoreDeduction[];
+  content: ScoreDeduction[];
+  aeoGeo: ScoreDeduction[];
+  performance: ScoreDeduction[];
 }
 
 export interface AgentReadyPrompt {
@@ -161,6 +254,15 @@ export interface DeepSeekSeoReport {
   /** Hand-off prompt the user can paste straight into a coding agent. */
   agentReadyPrompt?: AgentReadyPrompt;
   competitorComparisonText?: string;
+  /**
+   * 'measured' = scores are computed by fixed rules from the crawl (lib/audit/scoring.ts), with the
+   * deductions listed in scoreBreakdown. 'illustrative' = placeholder data was used.
+   * Older reports have neither and carry model-written estimates.
+   */
+  scoreMethod?: 'measured' | 'illustrative';
+  scoreBreakdown?: ScoreBreakdown;
+  /** What the evidence check did to the written report. */
+  qa?: { removed: Array<{ title: string; reason: string }>; added: string[] };
 }
 
 export interface WhiteLabelSettings {

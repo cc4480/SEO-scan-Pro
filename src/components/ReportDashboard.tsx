@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import React, { useState } from 'react';
 import AdditionalChecks from './AdditionalChecks';
+import EvidencePanel from './EvidencePanel';
 import AuditProgress from './AuditProgress';
 import { Scan, WhiteLabelSettings } from '../types';
 import { buildAgentReadyPrompt } from '../agentPrompt';
@@ -283,6 +284,14 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
         </div>
       </div>
 
+      <p className="-mt-4 text-center text-[11px] text-slate-500">
+        {scan.seoReport?.scoreMethod === 'measured'
+          ? 'Scores are computed from measured checks; see Evidence & accuracy below for every deduction.'
+          : scan.seoReport?.scoreMethod === 'illustrative'
+            ? 'Illustrative placeholder scores: the site could not be reached.'
+            : 'Scores in this older report are AI estimates and can vary between runs.'}
+      </p>
+
       {/* EXECUTIVE ANALYSIS STATEMENT */}
       {settings.enabledSections.includes('executive') && (
         <div className="glass-card rounded-2xl p-6 md:p-8 shadow-lg flex flex-col md:flex-row gap-6 items-start relative overflow-hidden">
@@ -474,6 +483,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       </div>
 
       <AdditionalChecks crawl={scan.crawlData} />
+      <EvidencePanel crawl={scan.crawlData} report={scan.seoReport} />
 
       {/* The saved audit trail: every request, measurement and fallback, in the order it happened. */}
       {Array.isArray(scan.crawlData?.log) && scan.crawlData!.log!.length > 0 && (

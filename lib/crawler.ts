@@ -1,3 +1,5 @@
+import { collectFacts } from './audit/collect';
+import { tagsToText } from './audit/htmlFacts';
 import { BrokenLink, CrawlPageData, CrawlResult, DuplicateGroup, ScanMode, SecurityHeaders } from '../src/types';
 import { getBrowser } from './browser';
 import { clip, heartbeat, noopEmit, type Emit } from './progress';
@@ -293,8 +295,9 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
     const visible = (bodyMatch ? bodyMatch[1] : html)
       .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, ' ')
       .replace(/<!--[\s\S]*?-->/g, ' ');
-    // Tags become spaces (not nothing), or "</h1><p>" would glue two words together.
-    const text = decodeEntities(visible.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+    // Block tags become spaces (or "</h1><p>" would glue two words together) but inline tags do not
+    // (or a page that wraps each letter in a <span> reads as hundreds of one-letter words).
+    const text = tagsToText(visible);
     result.wordCount = text ? text.split(' ').length : 0;
 
     // Canonical link
@@ -673,6 +676,8 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
 
   // Step 1: robots.txt -> sitemap, and /llms.txt. Independent of each other, so they run
   // concurrently; on a slow link the sequential version cost several seconds per scan.
+  // robots.txt text, kept for the crawler-access test: null = unreadable, '' = none published (everything allowed).
+  let robotsText: string | null = null;
   const robotsAndSitemap = (async () => {
     emit('robots', 'start', 'GET /robots.txt');
     let sitemapLoc = `${originUrl.origin}/sitemap.xml`;
@@ -680,6 +685,7 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
       const robotsRes = await safeFetch(`${originUrl.origin}/robots.txt`, { timeoutMs: 4000, maxBytes: 512 * 1024 });
       if (robotsRes.ok) {
         const text = robotsRes.text;
+        robotsText = text;
         emit('robots', 'ok', `/robots.txt → ${robotsRes.status} (${text.length} bytes)`);
         result.robotsBlocksAll = robotsBlocksAll(text);
         if (result.robotsBlocksAll) emit('robots', 'warn', 'site-wide "Disallow: /" for all crawlers — nothing on this site can be indexed');
@@ -692,6 +698,7 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
           emit('robots', 'info', 'no Sitemap: directive; falling back to /sitemap.xml');
         }
       } else {
+        if (robotsRes.status === 404 || robotsRes.status === 410) robotsText = '';
         emit('robots', 'info', `/robots.txt → ${robotsRes.status} (no crawl rules published, so all crawlers are allowed)`);
       }
     } catch (err: any) {
@@ -730,7 +737,6 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
     } catch (err: any) {
       emit('llms', 'info', `/llms.txt unreachable: ${clip(err?.message, 100)}`);
     }
-    emit('llms', 'done', result.llmsTxtFound ? 'present' : 'absent');
   })();
   await Promise.all([robotsAndSitemap, llmsCheck]);
 
@@ -756,6 +762,21 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
       result.redirectChain = rendered.redirectChain;
       result.securityHeaders = securityHeadersFrom(rendered.headers, rendered.redirectChain[rendered.redirectChain.length - 1]);
       realPage = true;
+      // Measured evidence the report is checked against: raw vs rendered content, structured-data
+      // contents, visible sections, and crawler access. Never allowed to fail the scan.
+      try {
+        result.facts = await collectFacts({
+          url: originUrl.toString(),
+          origin: originUrl.origin,
+          robotsText,
+          renderedHtml: rendered.html,
+          renderedStatus: rendered.status,
+          hreflangCount: result.mainPage.hreflang?.length ?? 0,
+          emit
+        });
+      } catch (err: any) {
+        emit('render', 'info', `evidence collection skipped: ${clip(err?.message, 90)}`);
+      }
     }
   } catch (err: any) {
     // A redirect or rebinding into a private address surfaces here. Propagate
@@ -774,6 +795,8 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
     result.mainPage = createMockPage(originUrl.toString(), 200, delay);
   }
   emit('render', 'done', realPage ? `HTTP ${result.mainPage.status}` : 'failed, simulated');
+  const blocked = result.facts?.botAccess?.results.filter((r) => r.blocked).length ?? 0;
+  emit('llms', 'done', blocked ? `${blocked} crawler(s) refused` : result.llmsTxtFound ? 'llms.txt present' : 'no llms.txt');
 
   if (realPage) {
     describePage(result.mainPage, emit, result.securityHeaders);
