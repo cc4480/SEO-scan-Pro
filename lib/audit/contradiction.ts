@@ -1,4 +1,5 @@
 import type { CrawlResult } from '../../src/types';
+import { navButtonsMatter } from './scoring';
 
 // Decides whether one written recommendation is contradicted by the measured evidence. It is
 // deliberately conservative: a suggestion is dropped only when it clearly asks for something the
@@ -20,6 +21,9 @@ const NEGATION = /\b(do not|don't|dont|never|avoid|unless|only if|only when|only
 // Generic ones (name, url, description, image) are left out: they appear in text incidentally.
 const REQUESTABLE = ['applicationCategory', 'operatingSystem', 'offers', 'totalTime', 'aggregateRating', 'review', 'sameAs', 'logo', 'contactPoint', 'address', 'author', 'publisher', 'softwareVersion', 'datePublished', 'dateModified', 'mainEntity', 'step', 'price', 'priceCurrency', 'availability', 'brand'];
 
+// schema.org subtypes of Organization: a site declaring one of these HAS Organization markup.
+const ORG_SUBTYPES = new Set(['Corporation', 'LocalBusiness', 'NGO', 'EducationalOrganization', 'CollegeOrUniversity', 'School', 'GovernmentOrganization', 'OnlineStore', 'Store', 'NewsMediaOrganization', 'MedicalOrganization', 'SportsOrganization', 'PerformingGroup', 'Airline', 'Restaurant', 'Hotel', 'OnlineBusiness', 'LibrarySystem']);
+
 const SECTION_TERMS: Record<string, string[]> = {
   pricing: ['pricing', 'plans', 'credits'],
   faq: ['faq', 'frequently asked questions'],
@@ -39,6 +43,7 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   const page = crawl.mainPage;
   const facts = crawl.facts;
   const signals = facts?.signals;
+  const rvr = facts?.rawVsRendered;
   const entities = facts?.schema?.entities ?? [];
   const aboutSchema = /schema|structured data|json-?ld|markup/.test(text);
   const headingPool = [...page.headings.h1, ...page.headings.h2, ...page.headings.h3].join(' ').toLowerCase();
@@ -49,6 +54,131 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   // Alt text on a page with no images.
   if (page.images.total === 0 && /\balt[ -]?(text|attributes?|tags?)\b|\balt=|missing alt|image alt/.test(text)) {
     return 'the page has no images, so there is no alt text to fix';
+  }
+
+  // alt="" is valid (decorative). A claim that N images "have no alt attribute" may not include them.
+  const noAlt = page.images.noAltAttribute;
+  if (noAlt !== undefined && page.images.total > 0) {
+    const claim = /(\d+)\s+(?:of\s+(?:the\s+)?\d+\s+)?(?:images?|img)\b[^.;]{0,40}?(?:no alt|without (?:an? )?alt|missing (?:an? )?alt|lack(?:s|ing)? (?:an? )?alt|alt (?:text|attributes?) (?:is|are) missing)/.exec(text);
+    const generic = /(?:missing|no|lack\w*|without)\s+(?:an?\s+)?alt\b|images? (?:are )?missing alt|alt[ -]?(?:text|attributes?)\s+(?:is|are)?\s*missing/.test(text);
+    const decorativeAware = /empty alt|alt=""|decorative/.test(text);
+    if (claim && Number(claim[1]) > noAlt) {
+      return `${claim[1]} images are said to have no alt attribute, but only ${noAlt} do (the rest have alt="", which marks a decorative image and is valid)`;
+    }
+    if (noAlt === 0 && generic && !decorativeAware) {
+      return 'every image has an alt attribute (empty alt="" marks a decorative image and is valid), so there is no missing alt text to fix';
+    }
+  }
+
+  // robots.txt / sitemap / llms.txt that could not be READ are unknown, not absent.
+  const absentClaim = (term: string) =>
+    asks(text, term) || new RegExp(`\\b${esc(term)}\\b[^.;]{0,40}\\b(?:not found|not present|does not exist|doesn't exist|could not be found|unavailable|returns? (?:a )?404)\\b`, 'i').test(text) || new RegExp(`\\b(?:not found|no|404)\\b[^.;]{0,20}\\b${esc(term)}\\b`, 'i').test(text);
+  if (crawl.sitemapChecked === false && /sitemap/.test(text) && absentClaim('sitemap')) return 'the sitemap request was refused or failed, so whether one exists is unknown (it was not found missing)';
+  if (crawl.llmsChecked === false && /llms\.txt/.test(text) && absentClaim('llms.txt')) return 'the llms.txt request was refused or failed, so whether one exists is unknown (it was not found missing)';
+  if (crawl.robotsReadable === false && /robots\.txt/.test(text) && (absentClaim('robots.txt') || /no (?:rules|directives)|no (?:explicit )?(?:crawler|bot) rules|(?:does not|doesn't) (?:explicitly )?(?:mention|list|address)/.test(text))) {
+    return 'robots.txt could not be read (the request was refused or failed), so nothing can be said about what it contains';
+  }
+
+  // A crawler that robots.txt explicitly disallows: the claim that robots.txt is silent about it is false.
+  for (const r of facts?.botAccess?.results ?? []) {
+    if (!(r.robotsAllows === false || crawl.robotsByCrawler?.[r.name] === 'disallowed') || !text.includes(r.name.toLowerCase())) continue;
+    if (/(?:does not|doesn't|not)\s+(?:explicitly|clearly)\s+(?:allow|disallow|mention|address|list|state|declare|specify|restrict)|(?:does not|doesn't)\s+(?:mention|address|list|state|declare|specify|restrict)|no (?:explicit )?(?:rule|directive|policy)|ambiguous|unclear|contradict/.test(text)) {
+      return `robots.txt explicitly disallows ${r.name}, so its policy is stated and a refusal is consistent with it`;
+    }
+  }
+
+  // Claims about a lead answer / definition / summary need the opening text the model was shown.
+  if (!signals?.openingText) {
+    const lead = '(?:direct answers?|concise (?:definition|answers?|summary)|definition block|(?:clear |brief |short )?definition|lead summary|summary (?:block|paragraph|sentence)|tl;?dr|answer[- ]first)';
+    const absent = new RegExp(`\\b(?:no|lacks?|lacking|missing|without|absent|not (?:have|provide|include|offer|open with))\\b[^.;]{0,50}\\b${lead}`, 'i');
+    // Only assertions of absence are dropped; "add a direct-answer block" is a recommendation, not a claim about the page.
+    if (absent.test(text) && !NEGATION.test(text)) return 'the opening text of the page was not provided as evidence, so whether it contains a direct answer, definition or summary cannot be judged';
+  }
+
+  // Advice to allow a crawler that robots.txt explicitly disallows, or a claim that robots.txt allows it.
+  for (const r of facts?.botAccess?.results ?? []) {
+    if (!(r.robotsAllows === false || crawl.robotsByCrawler?.[r.name] === 'disallowed') || !text.includes(r.name.toLowerCase())) continue;
+    const n = esc(r.name.toLowerCase());
+    const advisesAllow = new RegExp(`\\b(?:add|set|create|publish|include|declare)\\b[^.;]{0,30}\\ballow\\b|\\b(?:allow|permit|welcome|unblock)\\b[^.;]{0,60}\\b${n}\\b|\\b${n}\\b[^.;]{0,40}\\b(?:be allowed|to be allowed|explicitly allowed)\\b|\\brobots\\.txt\\s+(?:allows|permits|welcomes)\\b[^.;]{0,60}\\b${n}\\b`, 'i').test(text);
+    if (advisesAllow && !NEGATION.test(text)) return `robots.txt explicitly disallows ${r.name}: advising to allow it, or saying robots.txt allows it, contradicts the site's stated policy`;
+  }
+
+  // The site opted out of AI training (Content-Signal: ai-train=no): do not praise training access.
+  if (signals?.contentSignal?.aiTrain === false && /(?:optimal|ideal|welcome|well[- ]positioned|open|permissive|good|great|excellent)[^.;]{0,60}\b(?:ai[- ]training|training crawlers?|for training)\b|\ballows? (?:ai[- ])?training\b/.test(text) && !NEGATION.test(text)) {
+    return 'robots.txt declares Content-Signal ai-train=no, so the site opts out of AI training';
+  }
+
+  // A site with language-switcher links is not single-language.
+  if (signals?.multiLanguage && /single[- ]language|one language|monolingual|only one language/.test(text)) {
+    return 'the page links to several language versions, so it is not single-language';
+  }
+
+  // Retired or unsupported Google features must not be suggested as benefits.
+  if (/sitelinks? search ?box/.test(text)) return 'the sitelinks search box was retired by Google in 2024';
+  if (/(?:eligib|qualif|earn|unlock|trigger|appear|show|display|gain)[^.;]{0,50}\b(?:faq|how-?to) (?:rich )?(?:results?|snippets?)/.test(text) && !NEGATION.test(text)) {
+    return 'FAQ and HowTo rich results are no longer shown for ordinary sites, so they cannot be offered as a benefit';
+  }
+
+  // Organization subtypes count as Organization.
+  const have = new Set(entities.map((e) => e.type));
+  if (Array.from(have).some((t) => ORG_SUBTYPES.has(t)) && /\b(?:add|create|implement|publish|include|missing|no|lacks?|without)\b[^.;]{0,30}\borganization\b[^.;]{0,20}(?:schema|markup|structured data|json-ld)/.test(text)) {
+    return `an Organization subtype (${Array.from(have).filter((t) => ORG_SUBTYPES.has(t)).join(', ')}) is already declared`;
+  }
+
+  // Customer stories exist: "no testimonials / case studies" is wrong.
+  if (signals?.customerStories && /\b(?:add|include|create|missing|lacks?|lacking|no|without|absence of)\b[^.;]{0,40}\b(?:testimonials?|case stud(?:y|ies)|customer stories|social proof)\b/.test(text) && !NEGATION.test(text)) {
+    return 'the page already shows customer stories, case studies or testimonials';
+  }
+
+  // FAQPage only describes visible questions and answers; BreadcrumbList has no value on a homepage.
+  if (/\bfaqpage\b|faq (?:schema|markup|structured data)/.test(text) && /\b(?:add|implement|create|publish|include)\b/.test(text) && signals && !signals.sections.faq && !entities.some((e) => e.type === 'FAQPage')
+      && !(page.headings.h2.concat(page.headings.h3).some((h) => h.trim().endsWith('?')))) {
+    return 'the page has no visible question-and-answer content, so FAQPage markup would not describe anything on the page';
+  }
+  if (/breadcrumb/.test(text) && /\b(?:add|implement|create|publish|include|missing|no|lacks?)\b/.test(text) && /\bhome(?: ?page)?\b|root page|landing page|front page/.test(text)) {
+    let path = '/';
+    try { path = new URL(crawl.rootUrl).pathname; } catch { /* keep */ }
+    if (/^\/(?:[a-z]{2}(?:-[a-z]{2,4})?\/?)?$/i.test(path)) return 'a homepage has no breadcrumb trail to mark up';
+  }
+
+  // The no-JavaScript comparison was a bot wall or an unreliable response: its figures are not facts.
+  if (rvr && (rvr.rawChallenge || rvr.rawFetchUnreliable) && /(?:without|no|disabled|off) javascript|raw html|server-?sent|javascript[- ](?:dependen|only)|client-side render|server-?side render|pre-?render/.test(text)) {
+    return 'the no-JavaScript response was a bot wall or unreliable, so raw word, link and schema figures cannot be compared with the rendered page';
+  }
+
+  // Navigation "buttons": only a problem when real links are missing from the HTML the server sends.
+  if (rvr && /(?:nav(?:igation)?|menu|footer|header)[^.;]{0,30}\bbuttons?\b|\bbuttons?\b[^.;]{0,30}(?:nav(?:igation)?|menu)/.test(text) && !navButtonsMatter(rvr)) {
+    return `the navigation has real links (${rvr.navAnchors} anchors; ${rvr.rawLinks} links in the server HTML vs ${rvr.renderedLinks} rendered), so the buttons (language, search, cookie, menu toggles) do not hide it from crawlers`;
+  }
+
+  // HTTP 999 (and 401/403/429) from a link check is a bot wall, not a broken link.
+  if (/\bbroken\b/.test(text) && /\b(?:999|status 999|http 999)\b/.test(text)) return 'HTTP 999 is an anti-bot response, so the link was not verified broken';
+
+  // robots.txt that could not be read: nothing may be said about what it allows or disallows.
+  if ((crawl.robotsReadable === false || facts?.botAccess?.unreadableRobots) && /robots\.txt\s+(?:\w+\s+)?(?:allows|permits|welcomes|disallows|blocks|prohibits|forbids)\b/.test(text)) {
+    return 'robots.txt could not be read, so nothing can be said about what it allows or disallows';
+  }
+
+  // Report-only CSP is a policy, not an absence.
+  if (crawl.securityHeaders?.cspReportOnly && /content-security-policy|\bcsp\b/.test(text) && /\b(?:add|missing|no|lacks?|without|absent|start with|implement|set)\b/.test(text) && !/enforc/.test(text)) {
+    return 'the site already sends Content-Security-Policy-Report-Only';
+  }
+
+  // Redirects: a hop count that is not the measured one, or a location-based redirect called a defect.
+  if (crawl.redirectChain && /redirect/.test(text)) {
+    const hops = crawl.redirectHops ?? crawl.redirectChain.length - 1;
+    const words: Record<string, number> = { one: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+    const m = /\b([1-9]|one|single|two|three|four|five|six)[- ](?:redirect[- ])?(?:hops?|redirects?)\b/.exec(text);
+    if (m) {
+      const said = words[m[1]] ?? Number(m[1]);
+      if (said !== hops) return `the redirect count is wrong: the scan measured ${hops} redirect${hops === 1 ? '' : 's'}, not ${said}`;
+    }
+    if (crawl.redirectChain.some((u) => /^https?:\/\/geo\.|\/area\/|[?&](?:lang|locale|country)=/i.test(u))) return 'the redirect depends on the visitor\'s location or language by design, so it is not a defect';
+  }
+
+  // Statements about what the retired "not a defect" padding says of itself.
+  if (/\b(?:this is )?not (?:really )?(?:a|an) (?:defect|problem|issue)\b|no action (?:is )?(?:needed|required)|nothing to fix/.test(text)) {
+    return 'the suggestion itself says there is nothing to fix';
   }
 
   // hreflang on a single-language site.
@@ -110,7 +240,13 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
       if (!(signals.sections as Record<string, boolean>)[key]) continue;
       for (const term of terms) {
         const t = esc(term);
-        const asksForSection = new RegExp(`\\b${ASK}\\b[^.;]{0,40}\\b${t}\\b[^.;]{0,30}\\b(?:section|page|block|heading|content)\\b`, 'i').test(text);
+        // "about"/"contact" are ordinary words ("guide AI models about ..."): they name a section only
+        // when directly followed by section/page, and never when the suggestion is about another artefact.
+        const bare = key === 'about' || key === 'contact';
+        if (bare && /llms\.txt|sitemap|schema|json-?ld|robots\.txt|structured data|meta description|canonical/.test(text)) continue;
+        const asksForSection = new RegExp(bare
+          ? `\\b${ASK}\\b[^.;]{0,40}\\b${t}(?:\\s+us)?\\s+(?:section|page|block|heading)\\b`
+          : `\\b${ASK}\\b[^.;]{0,40}\\b${t}\\b[^.;]{0,30}\\b(?:section|page|block|heading|content)\\b`, 'i').test(text);
         if (asksForSection) return `the page already has a ${key === 'howItWorks' ? '"how it works"' : key} section`;
       }
     }

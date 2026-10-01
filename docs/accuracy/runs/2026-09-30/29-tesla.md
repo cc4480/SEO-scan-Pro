@@ -35,4 +35,22 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R5. Counts: ACCURATE 1, INACCURATE 7, MISLEADING 1, UNSUPPORTED 4, SUBJECTIVE 0.
+
+Summary: Tesla is genuinely unreachable from this tooling (Akamai "Access Denied", reference #18.x, for Chromium, plain curl, browser UA and every bot UA; robots/sitemap/llms all 403). The simulated verdict is right, and unlike Stack Overflow the first critical issue says so. But the other 12 findings are written from the placeholder payload as if they were measurements of tesla.com. Fabricated placeholder data presented as findings: "3 of 14 images missing alt" (4, 8), meta title "Www | Leading Solutions & Professional Services" (5, 9; the brand "Www" is the hostname prefix, not Tesla), structured data "Organization, WebSite and LocalBusiness" (10, aeo richSnippetEligibility), "19 internal links" (11), "FAQ section with H2 'Frequently Asked Questions'" (12), "596 ms load time ... which is fast" and 56 KB (13, summary). The executive summary and agentReadyPrompt repeat all of it, including a "Rewrite the meta title" task for a coding agent. Scores 68/72/65/70/85 are the same as Stack Overflow's (fixed placeholder). The report does say "illustrative", but the findings read as real.
+
+Measurement table: only "simulated vs 403" (correct). Ground truth shows an Akamai error page with 15 words.
+
+1. ACCURATE: honest disclosure; the only finding that should survive for an unreachable site. It is not a "critical issue of the site", it belongs in a banner.
+2. UNSUPPORTED: sitemap.xml answered 403 to the scan (ground got 404, curl 403), so "no sitemap" is unestablished (A-01); the added "if this were a real crawl" hedge shows the model knows it.
+3. UNSUPPORTED: llms.txt answered 403; unestablished (A-01).
+4. INACCURATE: placeholder image data; the checker flags confirm the page has 0 images in what was actually fetched.
+5. INACCURATE: the "generic title" is the placeholder title; the real tesla.com title was never read.
+6. UNSUPPORTED: sitemap advice from a 403 (also "Sitemap: https://www.tesla.com/sitemap.xml" is invented guidance for a site whose robots.txt was never read).
+7. UNSUPPORTED: llms.txt advice from a 403.
+8. INACCURATE: placeholder images (3 of 14).
+9. INACCURATE: rewrite a title that is a placeholder; rated "high".
+10. INACCURATE: the JSON-LD types are placeholder; real page unknown.
+11. INACCURATE: "19 internal links" is placeholder.
+12. INACCURATE: no FAQ H2 exists; fabricated.
+13. MISLEADING: 596 ms / 56 KB are the timing and size of the placeholder / Access Denied response, not of the page; "fast" is not a real finding.

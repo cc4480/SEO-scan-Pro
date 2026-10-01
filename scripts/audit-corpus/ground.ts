@@ -25,6 +25,33 @@ const todo = only.length ? all.filter((e) => only.some((p) => e.id.startsWith(p)
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const words = (s: string) => (s ? s.split(/\s+/).filter(Boolean).length : 0);
 
+// Does the "User-agent: *" group disallow the whole site? Written independently of the scanner's
+// parser. The earlier regex ran across group boundaries and flagged sites whose "Disallow: /" belongs to
+// a different crawler (A-12 in docs/accuracy/FIX-LOG.md).
+function disallowsEveryone(text: string): boolean {
+  let inStar = false;
+  let sawRule = false;
+  let blocks = false;
+  let allowsRoot = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*/, '').trim();
+    const idx = line.indexOf(':');
+    if (idx < 0) continue;
+    const key = line.slice(0, idx).trim().toLowerCase();
+    const value = line.slice(idx + 1).trim();
+    if (key === 'user-agent') {
+      // A new group starts when a user-agent line follows rules.
+      if (sawRule) { inStar = false; sawRule = false; }
+      if (value === '*') inStar = true;
+    } else if (key === 'disallow' || key === 'allow') {
+      sawRule = true;
+      if (inStar && key === 'disallow' && value === '/') blocks = true;
+      if (inStar && key === 'allow' && (value === '/' || value === '')) allowsRoot = key === 'allow' && value === '/';
+    }
+  }
+  return blocks && !allowsRoot;
+}
+
 async function http(url: string, ua = UA): Promise<{ status: number; text: string; headers: Record<string, string> }> {
   try {
     const ctl = new AbortController();
@@ -54,7 +81,14 @@ async function one(browser: Browser, e: Entry): Promise<void> {
     await page.setViewport({ width: 1366, height: 900 });
     const res = await page.goto(e.url, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
     await new Promise((r) => setTimeout(r, 1500));
+    // Challenge pages ("Just a moment") clear after a few seconds; wait, then scroll so lazy content
+    // hydrates before measuring (R3-02, R5-09).
+    for (let i = 0; i < 8 && /just a moment|checking your browser|unsupported client|access denied/i.test(await page.title()); i++) await new Promise((r) => setTimeout(r, 1500));
+    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+    await new Promise((r) => setTimeout(r, 1500));
+    await page.evaluate('window.scrollTo(0, 0)');
     const m = await page.evaluate(MEASURE_SRC) as any;
+    out.challengeTitle = /just a moment|checking your browser|unsupported client|access denied/i.test(await page.title());
     out.rendered = { status: res?.status() ?? 0, finalUrl: page.url(), ...m, words: words(m.bodyText) };
     const h = res?.headers() ?? {};
     out.securityHeaders = {
@@ -77,6 +111,8 @@ async function one(browser: Browser, e: Entry): Promise<void> {
     const page = await browser.newPage();
     await page.setJavaScriptEnabled(false);
     await page.setUserAgent(UA);
+    // No cache: a conditional request answered 304 gives a status that is not the page (N-13).
+    await page.setCacheEnabled(false);
     const res = await page.goto(e.url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => null);
     const m = await page.evaluate(MEASURE_SRC) as any;
     out.noJs = { status: res?.status() ?? 0, words: words(m.bodyText), anchors: m.anchors, jsonLdTypes: m.jsonLdTypes, h1: m.h1.length, imagesTotal: m.imagesTotal };
@@ -91,7 +127,7 @@ async function one(browser: Browser, e: Entry): Promise<void> {
   out.http = {
     baseline: home.status,
     robotsStatus: robots.status,
-    robotsDisallowAll: /user-agent:\s*\*[\s\S]*?\n\s*disallow:\s*\/\s*(\n|$)/i.test(robots.text),
+    robotsDisallowAll: robots.status === 200 && disallowsEveryone(robots.text),
     robotsSitemapDirective: sitemapLine ? sitemapLine.split(/:(.+)/)[1]?.trim() : null,
     sitemapXmlStatus: sitemap.status,
     llmsStatus: llms.status,

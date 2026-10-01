@@ -66,4 +66,21 @@ Added by the checker: JavaScript-dependent content; schema only after JavaScript
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R4. Counts: ACCURATE 5, INACCURATE 4, MISLEADING 3, UNSUPPORTED 0, SUBJECTIVE 0.
+
+Main defect: the "JavaScript-only content" story is false. python.org is classic server-rendered: live curl (three different User-Agents incl. the scanner's own and the raw-fetch Chrome UA) returns 200 / 52,966 bytes with 205 real anchors, ~1,050 words and a JSON-LD block (WebSite/SearchAction) in the raw HTML; ground truth's JavaScript-off load agrees (559 visible words, 204 anchors, 2 schema types). The scanner's raw fetch recorded rawBytes 21,035, 164 words, 0 links, 0 schema. The first 21,035 bytes of the real page alone already hold 72-81 anchors, so this is not plain truncation: the scanner got a different or broken response and trusted it. I could not reproduce it in 9 further requests (node https with the same UA and headers: 6 identical full responses). It then propagated to critical 1, fixes 5 and 6 and two "added by the checker" findings. Related: ssrfGuard.requestOnce resolves on 'close' as well as 'end' and never rejects an aborted response, so a cut-off body is silently accepted as complete.
+
+Other mismatches: visible/rendered words 1007/1010 vs 548 = A-09 (hidden menu text). Links 208 vs 219+11: fine. Raw words/links = the defect above.
+
+1. INACCURATE: raw HTML has ~1,050 words, 205 links and schema (live curl); ground JS-off 559 words, 204 anchors. Not a JavaScript-rendered page.
+2. ACCURATE: /sitemap.xml 404 and robots.txt has no Sitemap directive. "Critical" is inflated (A-13).
+3. ACCURATE: /llms.txt 404. Calling a non-standard, optional file "critical" is severity inflation (A-13); the matching fix was removed by the checker while this critical stayed (see new defect R4-05).
+4. MISLEADING: LinkedIn status 999 is a bot-block, not a broken link; the text hedges but the headline says "broken" and lists it as critical. 999 should not count as broken (new defect R4-04).
+5. INACCURATE: "plain request returns 164 words and 0 links" is false for the real site (205 links, ~1,050 words).
+6. INACCURATE: the WebSite/SearchAction JSON-LD is in the server HTML (one application/ld+json block in raw curl output).
+7. ACCURATE: no sitemap. "high" priority is generous but defensible. Minor: advice to list /downloads/, /doc/ etc is generic.
+8. MISLEADING: LinkedIn 999 is anti-bot behaviour (my own HEAD with a browser UA got a normal 301). Suggesting rel="nofollow" does not address anything.
+9. MISLEADING: X-Content-Type-Options and Referrer-Policy really are absent, but the site sends a Content-Security-Policy-Report-Only header (verified live), so "CSP missing" and "start with a report-only policy" ignore that one already exists. Enforcement is what is missing.
+10. ACCURATE: CLS 0.147 reproduced (my loads: 0.149 and 0.124). Advice about image dimensions is generic (the page has 1 image).
+11. INACCURATE: "The page has a visible FAQ section" is false: the only match is a footer link "FAQ" to docs.python.org/3/faq/ (another site), A-05. The Organization/SoftwareApplication suggestions are fine.
+12. ACCURATE: there is no twitter:card meta tag at all (described as "empty"); og: tags exist.

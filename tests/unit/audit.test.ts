@@ -502,7 +502,8 @@ describe('severity calibration', () => {
     const d = draft();
     d.criticalIssues.push('Navigation is built from buttons, not anchors; the raw HTML exposes few links.');
     const out = finalizeReport(d, c);
-    expect(out.criticalIssues.join(' ')).toMatch(/Navigation is built from buttons/);
+    // A-13: not a measured severe condition, so it is calibrated down to a fix rather than dropped by the JS rule.
+    expect(out.recommendedFixes.map((f) => f.title).join(' ')).toMatch(/Navigation is built from buttons|real links/);
   });
 
   it('keeps the severe case critical when the raw HTML is nearly empty', () => {

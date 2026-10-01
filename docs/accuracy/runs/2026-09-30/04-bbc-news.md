@@ -65,4 +65,10 @@ Added by the checker: search/assistant crawlers blocked
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Lead review.
+Measurements: only mismatch is "robots.txt blocks all" = **ground-truth tool bug A-12** (BBC has no site-wide block; fixed in the tool).
+Findings:
+1,2,6. MISLEADING (**A-15**): Perplexity-User gets 403, but BBC's robots.txt explicitly DISALLOWS Perplexity-User (and PerplexityBot, GPTBot, ClaudeBot, CCBot, Bytespider). The refusal is the site's enforced policy, not a defect; raised as critical/high.
+3. ACCURATE (ogImage, twitterCard empty). 4. ACCURATE number (12 of 32; ground: 10 lack the attribute), no empty-alt split (**A-08**).
+5. INACCURATE (**A-15**): "robots.txt does not explicitly allow GPTBot..., ambiguity should be resolved" while robots.txt explicitly disallows GPTBot, ClaudeBot, CCBot, Bytespider, PerplexityBot, Perplexity-User.
+7,8,9,10,11. ACCURATE/SUBJECTIVE (llms.txt absent, thin structured data, TTFB caveat).

@@ -72,4 +72,25 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Counts: ACCURATE 4, INACCURATE 3, MISLEADING 7, UNSUPPORTED 1, SUBJECTIVE 3.
+
+**Mismatches explained (live: puppeteer at 800x600 and 1366x900, curl).** No challenge, same page for both runs. H2 8 vs 13: viewport-dependent; at the scanner's default 800px the DOM has 8 H2, at the ground tool's 1366px it has 13 (R3-01). Visible words 2,076 vs 463: live innerText is 414-463, so ground is right and the scanner overcounts hidden text about 4.5x (A-09); raw 1,226 vs JS-off 318 likewise (A-10). Robots "blocks all": the live file's `*` group has only path rules; `Disallow: /` belongs to Baiduspider/HaoSouSpider/Sogou etc., so scanner `false` is right and ground `true` is a ground-tool regex defect (A-12). Meta description: the real text is "Inspiring the world's athletes, Nike delivers innovative products, experiences and services." (93 chars); the scanner stored "Inspiring the world" (apostrophe truncation, A-14), not flagged by the sheet because only presence is compared. Crawler probes: ground and scanner agree (403 for all 13 spoofed UAs); curl with a Chrome UA and with `curl/8` gets 200, GPTBot-style and Googlebot-style UAs get 403 (Akamai UA rule); this says nothing about the real, IP-verified bots (A-02). Lab CLS: 0.185 at 800px (scanner 0.192) vs 0.054 at 1366px; LCP 13 s vs 3.1 s (R3-01). Security headers: X-Content-Type-Options and Referrer-Policy absent on GET (curl -D).
+
+1. MISLEADING: 403s are spoofed-UA probes at the edge (A-02); reading them as "Googlebot is blocked" is unsupported; Nike is plainly indexed.
+2. ACCURATE: all 13 got 403, robots allows them, and the plain Chrome UA gets 200, so the rule is in the WAF/bot manager.
+3. MISLEADING: "removes the homepage from AI answer surfaces and threatens indexation" generalises from spoofed requests (A-02); the "for the tested user agents" hedge is not enough for a "critical".
+4. UNSUPPORTED: nothing shows a real ChatGPT-User/Claude-User/Perplexity-User fetch (from the vendors' IPs) is refused, so "cannot be cited when a user asks" cannot be concluded.
+5. INACCURATE: 0 of 88 images lack the alt attribute; all 42 are `alt=""` (valid decorative, e.g. carousel/duplicate imagery) (A-08). "Primary content carrier" is a guess.
+6. MISLEADING: the raw HTML already has 499 of 603 links, all 5 JSON-LD types, and 318 of ~463 visible words; the "1,226 vs 2,081 words" is hidden-text overcount (A-09/A-10); the 14 "navigation buttons" are not the navigation (420 anchors, R3-04). "A large share of the page is invisible" is overstated.
+7. SUBJECTIVE: the markup is `EVERYTHING<br>LED HERE`; this client renders it without a break ("EVERYTHINGLED HERE"), so the quoted string is real for this layout, but "non-descriptive" is a design judgement on a campaign headline, not a defect, and "critical" is not reasonable.
+8. SUBJECTIVE: true that Product/ItemList/BreadcrumbList are absent; critical for a brand homepage is not reasonable (A-13).
+9. MISLEADING: 0.192 is real only at the scanner's 800px viewport; at 1366px the same page measures 0.054 ("good"). Not shown as viewport-specific (R3-01).
+10. MISLEADING: same as 1/3; the fix asks the owner to change a policy the evidence cannot show is wrong.
+11. ACCURATE: robots.txt has no rules for GPTBot/ClaudeBot/CCBot/Bytespider (grep: none) and the edge returns 403; the statement of mismatch is right and left as the owner's choice.
+12. INACCURATE: "42 of 88 have no alt attribute" is wrong (0 lack it; 42 are `alt=""`); "Audit all 88" mixes decorative with informative (A-08).
+13. MISLEADING: the H1 text is the site's own `<br>` markup; the "repeating H2s" are the desktop and mobile copies of the same hero (e.g. "SAM KERR/MERCURIAL SUPERFLY" and its concatenated twin), only one visible at a time, so the "weakens the outline" point is not a real defect; the scanner also misses 5 of the 13 H2 at desktop width (R3-01).
+14. SUBJECTIVE: the five types are correct; adding ItemList for carousels is a reasonable but optional enhancement.
+15. ACCURATE: `/llms.txt` 404; advice is generic but true.
+16. MISLEADING: lab CLS numbers are viewport-dependent (R3-01); the hedge "lab, not field" is good but the number is for a tablet-width layout.
+17. ACCURATE: neither header is present on the GET response; HSTS, CSP and X-Frame-Options are.
+18. INACCURATE: the quoted description is a truncation; the real one is a full sentence (A-14). The suggestion to lengthen it to 120-155 characters is fair, but the "too short" premise is wrong by a factor of 4.

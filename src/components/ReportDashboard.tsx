@@ -77,7 +77,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
         recommendedFixes,
         aeoAssessment,
         executiveSummary,
-        isSimulated: scan.crawlData?.hasSimulatedData === true
+        isSimulated: scan.crawlData?.hasSimulatedData === true || scan.crawlData?.pageKind === 'challenge'
       });
 
   const copyAgentPrompt = async () => {
@@ -171,12 +171,28 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
     : 0;
 
   const hasSimulatedData = scan.crawlData?.hasSimulatedData === true;
+  const isChallenge = scan.crawlData?.pageKind === 'challenge';
 
   return (
     <div className="space-y-8 animate-fadeIn">
 
       {/* SIMULATED DATA WARNING — the target site could not actually be reached during this scan */}
-      {hasSimulatedData && (
+      {isChallenge && (
+        <div className="bg-red-500/15 border-2 border-red-500/40 text-red-200 rounded-2xl p-5 flex items-start gap-3 shadow-lg">
+          <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-extrabold text-red-100 text-sm uppercase tracking-wide">
+              {isEs ? 'El sitio mostró un desafío anti-bots — No es una Auditoría Real' : 'Bot Challenge Served — Not a Real Audit'}
+            </h3>
+            <p className="text-xs text-red-200/90 mt-1 leading-relaxed">
+              {isEs
+                ? `El sitio mostró un desafío anti-bots${scan.crawlData?.challengeReason ? ` (${scan.crawlData.challengeReason})` : ''}, por lo que no se pudo auditar la página real. No se informa ningún hallazgo sobre su contenido.`
+                : `The site served a bot challenge${scan.crawlData?.challengeReason ? ` (${scan.crawlData.challengeReason})` : ''}, so the real page could not be audited. No findings about its content are reported, and any scores are illustrative placeholders.`}
+            </p>
+          </div>
+        </div>
+      )}
+      {hasSimulatedData && !isChallenge && (
         <div className="bg-red-500/15 border-2 border-red-500/40 text-red-200 rounded-2xl p-5 flex items-start gap-3 shadow-lg">
           <AlertTriangle className="h-6 w-6 text-red-400 flex-shrink-0 mt-0.5" />
           <div>

@@ -1,11 +1,17 @@
 import { collectFacts } from './audit/collect';
-import { tagsToText } from './audit/htmlFacts';
+import { classifyChallenge } from './audit/challenge';
+import { robotsAccess, robotsBlocksEveryone } from './audit/robotsRules';
+import { BOTS } from './audit/botAccess';
+import { decode as decodeHtml, findTags, stripHidden, tagsToText } from './audit/htmlFacts';
 import { BrokenLink, CrawlPageData, CrawlResult, DuplicateGroup, ScanMode, SecurityHeaders } from '../src/types';
 import { getBrowser } from './browser';
 import { clip, heartbeat, noopEmit, type Emit } from './progress';
 import { assertPublicUrl, browserRequestAllowed, isBlockedAddress, safeFetch, SsrfBlockedError } from './ssrfGuard';
 
 const CRAWLER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1';
+// Second identity, used once when the first is refused: a standard Chrome token (some sites reject
+// agents without one) that still names this tool.
+const RETRY_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 SEO-Scan-Pro/1.1';
 
 interface RenderedPage {
   html: string;
@@ -18,19 +24,43 @@ interface RenderedPage {
   /** Every URL from the requested one to the final page. */
   redirectChain: string[];
   webVitals?: { lcpMs?: number; cls?: number };
+  /**
+   * The browser's own `document.body.innerText`: exactly the text a visitor can read, with menus,
+   * display:none and visually hidden text left out. Undefined when the page would not answer.
+   */
+  visibleText?: string;
+  /** Total bytes transferred over the network for the whole page load (KB, compressed). */
+  transferKb?: number;
+  /** Requests the page made while loading. */
+  requestCount?: number;
+  /** The client identity this load used (reused for the raw and JavaScript-off comparisons). */
+  userAgent?: string;
 }
 
 // Renders the page in a real (headless) browser rather than a plain fetch, so JavaScript-
 // rendered content (SPAs, client-side frameworks) shows up in the crawled HTML instead of
 // an empty shell. parsePage() below works on any HTML string, rendered or not, so nothing
 // downstream needs to change.
-async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit): Promise<RenderedPage> {
+async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit, userAgent: string = CRAWLER_USER_AGENT): Promise<RenderedPage> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   const startTime = Date.now();
   let beatStop: () => void = () => {};
   try {
-    await page.setUserAgent(CRAWLER_USER_AGENT);
+    await page.setUserAgent(userAgent);
+    // A standard desktop viewport. Puppeteer's default is 800x600, which triggers mobile/tablet
+    // layouts and different lazy loading (Nike: CLS 0.185 vs 0.054 and 8 vs 13 H2s at 1366 wide).
+    await page.setViewport({ width: 1366, height: 900 });
+    // Bytes actually transferred (compressed, all resources), measured from the network layer.
+    // The serialized DOM is not the page weight.
+    let transferBytes = 0;
+    try {
+      const cdp = await page.createCDPSession();
+      await cdp.send('Network.enable');
+      cdp.on('Network.loadingFinished', (e: { encodedDataLength?: number }) => { transferBytes += e.encodedDataLength ?? 0; });
+    } catch {
+      transferBytes = -1; // not measurable: left undefined below
+    }
 
     // Real page-lifecycle events for the live log: each fires when Chromium reports it, so a slow
     // site reads as "still loading, N requests so far" instead of a silent wait.
@@ -138,6 +168,23 @@ async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit)
     // performance — and on a slow or remote scanning host the wall clock is dominated by that
     // host's network latency rather than the site. `ttfbMs` is kept separately so the report can
     // tell "the network is slow" apart from "the page is heavy".
+    // A JavaScript challenge ("Just a moment...") clears itself once the browser has solved it and
+    // reloads into the real page. Give it a bounded time (10 s) before reading anything, so the
+    // page measured is the site and not the wait screen.
+    if (/^(just a moment|checking your browser|one more step|verifying you are human)/i.test(await page.title().catch(() => ''))) {
+      emit('render', 'info', 'a bot-check screen is showing: waiting up to 10s for it to clear');
+      const cleared = await page
+        .waitForFunction(() => !/^(just a moment|checking your browser|one more step|verifying you are human)/i.test(document.title), { timeout: 10000 })
+        .then(() => true, () => false);
+      if (cleared) {
+        await page.waitForNetworkIdle({ idleTime: 500, timeout: 4000 }).catch(() => {});
+        if (mainResponse) response = mainResponse; // the status of the page it cleared into, not of the challenge
+        emit('render', 'info', `the bot-check cleared after ${Date.now() - startTime}ms`);
+      } else {
+        emit('render', 'warn', 'the bot-check did not clear within 10s');
+      }
+    }
+
     const navTiming = await page
       .evaluate(() => {
         const nav = performance.getEntriesByType('navigation')[0] as
@@ -153,6 +200,12 @@ async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit)
 
     const loadTimeMs = navTiming?.loadMs || Date.now() - startTime;
     const html = await page.content();
+    // What a reader actually sees. Counting words from the markup also counts hidden menus,
+    // aria-hidden duplicates and display:none blocks (Apple: 1510 words by markup, 893 visible).
+    const visibleText = await page
+      .evaluate(() => (document.body ? document.body.innerText : ''))
+      .then((t) => (typeof t === 'string' ? t : undefined))
+      .catch(() => undefined);
 
     const vitals = await page
       .evaluate(() => (window as any).__vitals as { lcp?: number; cls?: number } | undefined)
@@ -176,7 +229,11 @@ async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit)
       ttfbMs: navTiming?.ttfbMs,
       headers: response?.headers() ?? {},
       redirectChain,
-      webVitals
+      webVitals,
+      visibleText,
+      transferKb: transferBytes > 0 ? Math.round(transferBytes / 102.4) / 10 : undefined,
+      requestCount,
+      userAgent
     };
   } finally {
     beatStop();
@@ -219,15 +276,49 @@ function cleanText(html: string): string {
   return decodeEntities(html.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
 }
 
-export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?: number): CrawlPageData {
+/** Words in a string of already-visible text. */
+function countWords(text: string): number {
+  const t = text.trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+/** True when `rel` (a space-separated token list) contains the token. */
+function relHas(rel: string | undefined, token: string): boolean {
+  return (rel || '').toLowerCase().split(/\s+/).includes(token);
+}
+
+/** Text between a start tag's end and its closing tag (or the next sibling start of the same tag, for unclosed ones). */
+const BOUNDARY: Record<string, RegExp> = {};
+function innerHtml(html: string, name: string, from: number): string {
+  const re = (BOUNDARY[name] ??= new RegExp(`</?${name}(?=[\\s/>])`, 'gi'));
+  re.lastIndex = from;
+  const stop = re.exec(html);
+  return html.slice(from, stop ? stop.index : html.length);
+}
+
+/**
+ * `visibleText` is the browser's own innerText for the page. When it is available it is the source of
+ * truth for the word count; without it (a plain HTML string) the markup is counted instead, minus the
+ * elements the markup itself marks hidden.
+ */
+export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?: number, visibleText?: string): CrawlPageData {
   // A browser with JavaScript on never shows <noscript> content, so headings, links and images
   // inside it are not part of the page being audited (they were being counted as duplicates).
   html = html.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ');
+  // JSON-LD lives in a <script>; everything else must be read with scripts, styles, templates and
+  // comments removed, or markup quoted inside inline JSON / inert <template>s is counted as page
+  // content (Craigslist: 451 "links" by regex, 258 real anchors in the live DOM).
+  const withScripts = html;
+  html = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<template\b[\s\S]*?<\/template>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
   const result: CrawlPageData = {
     url,
     loadTimeMs,
     ttfbMs,
-    pageSizeKb: Math.round((html.length / 1024) * 10) / 10,
+    pageSizeKb: Math.round((withScripts.length / 1024) * 10) / 10,
     status: 200,
     isSimulated: false,
     meta: {
@@ -239,7 +330,7 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
       canonical: ''
     },
     headings: { h1: [], h2: [], h3: [] },
-    images: { total: 0, missingAlt: 0, list: [] },
+    images: { total: 0, missingAlt: 0, noAltAttribute: 0, emptyAlt: 0, lazyNoSrc: 0, list: [] },
     links: { total: 0, internal: 0, external: 0, list: [] },
     structuredData: { hasJsonLd: false, types: [] },
     lang: '',
@@ -255,82 +346,62 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
       result.meta.title = cleanText(titleMatch[1]);
     }
 
-    // Decoupled meta extractors for reliability
-    const metaRegex = /<meta\s+([^>]*?)>/gi;
-    let match;
-    while ((match = metaRegex.exec(html)) !== null) {
-      const metaAttributes = match[1];
-      const nameMatch = metaAttributes.match(/name\s*=\s*["']([^"']*)["']/i) || metaAttributes.match(/property\s*=\s*["']([^"']*)["']/i);
-      const contentMatch = metaAttributes.match(/content\s*=\s*["']([^"']*)["']/i);
-
-      if (nameMatch && contentMatch) {
-        const name = nameMatch[1].toLowerCase();
-        const content = contentMatch[1];
-        if (name === 'description') result.meta.description = content;
-        if (name === 'keywords') result.meta.keywords = content;
-        if (name === 'viewport') result.meta.viewport = content;
-        if (name === 'robots') result.meta.robots = content;
-        if (name === 'og:title') result.social!.ogTitle = content;
-        if (name === 'og:description') result.social!.ogDescription = content;
-        if (name === 'og:image') result.social!.ogImage = content;
-        if (name === 'og:type') result.social!.ogType = content;
-        if (name === 'twitter:card') result.social!.twitterCard = content;
-      }
+    // Meta tags. Read through the attribute tokenizer: a double-quoted description may contain an
+    // apostrophe ("GitHub is where the world's developers...") and a character-class regex stopped there.
+    // The first tag of a key wins, as it does for document.querySelector. A tag may carry BOTH
+    // name and property (GOV.UK: <meta name="title" property="og:title">), and each one is a key.
+    const seenMeta = new Set<string>();
+    const metaKeys = findTags(html, 'meta').flatMap(({ attrs }) =>
+      attrs.content === undefined ? [] : [attrs.name, attrs.property].filter((k): k is string => !!k).map((k) => [k.toLowerCase(), attrs.content] as const));
+    for (const [name, content] of metaKeys) {
+      if (seenMeta.has(name)) continue;
+      seenMeta.add(name);
+      if (name === 'description') result.meta.description = content;
+      if (name === 'keywords') result.meta.keywords = content;
+      if (name === 'viewport') result.meta.viewport = content;
+      if (name === 'robots') result.meta.robots = content;
+      if (name === 'og:title') result.social!.ogTitle = content;
+      if (name === 'og:description') result.social!.ogDescription = content;
+      if (name === 'og:image') result.social!.ogImage = content;
+      if (name === 'og:type') result.social!.ogType = content;
+      if (name === 'twitter:card') result.social!.twitterCard = content;
     }
 
     // <html lang="...">
-    const langMatch = html.match(/<html[^>]*\slang\s*=\s*["']([^"']*)["']/i);
-    if (langMatch) result.lang = langMatch[1].trim();
+    const htmlTag = findTags(html, 'html')[0];
+    if (htmlTag?.attrs.lang) result.lang = htmlTag.attrs.lang.trim();
 
-    // hreflang alternates (attribute order varies, so read each <link> tag's attributes separately)
-    const linkTagRegex = /<link\s+([^>]*?)>/gi;
-    let linkTag;
-    while ((linkTag = linkTagRegex.exec(html)) !== null) {
-      const attrs = linkTag[1];
-      if (!/rel\s*=\s*["']alternate["']/i.test(attrs)) continue;
-      const lang = attrs.match(/hreflang\s*=\s*["']([^"']*)["']/i);
-      const href = attrs.match(/href\s*=\s*["']([^"']*)["']/i);
-      if (lang && href && result.hreflang!.length < 50) result.hreflang!.push({ lang: lang[1].trim(), href: href[1].trim() });
+    // <link> tags: hreflang alternates and the canonical (attribute order varies; each tag is read whole)
+    for (const { attrs } of findTags(html, 'link')) {
+      if (relHas(attrs.rel, 'canonical') && attrs.href !== undefined && !result.meta.canonical) result.meta.canonical = attrs.href;
+      if (!relHas(attrs.rel, 'alternate') || attrs.hreflang === undefined || attrs.href === undefined) continue;
+      // The list is a capped sample; the true number of alternates is kept apart so a report never quotes the cap.
+      result.hreflangTotal = (result.hreflangTotal ?? 0) + 1;
+      if (result.hreflang!.length < 50) result.hreflang!.push({ lang: attrs.hreflang.trim(), href: attrs.href.trim() });
     }
 
-    // Visible word count: drop code/markup blocks first so inline JSON and CSS do not inflate it.
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-    const visible = (bodyMatch ? bodyMatch[1] : html)
-      .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<!--[\s\S]*?-->/g, ' ');
-    // Block tags become spaces (or "</h1><p>" would glue two words together) but inline tags do not
-    // (or a page that wraps each letter in a <span> reads as hundreds of one-letter words).
-    const text = tagsToText(visible);
-    result.wordCount = text ? text.split(' ').length : 0;
-
-    // Canonical link
-    const canonicalMatch = html.match(/<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']*)["']/i) ||
-                         html.match(/<link[^>]+href\s*=\s*["']([^"']*)["'][^>]+rel\s*=\s*["']canonical["']/i);
-    if (canonicalMatch) {
-      result.meta.canonical = canonicalMatch[1];
+    // Visible word count. The browser's innerText is what a reader sees. The markup count is only a
+    // fallback (plain HTML, no browser): it drops script/style blocks and elements the markup hides.
+    if (visibleText !== undefined) {
+      result.wordCount = countWords(visibleText);
+    } else {
+      const bodyTag = findTags(html, 'body')[0];
+      const visible = stripHidden(bodyTag ? html.slice(bodyTag.end) : html).replace(/<svg[\s\S]*?<\/svg>/gi, ' ');
+      // Block tags become spaces (or "</h1><p>" would glue two words together) but inline tags do not
+      // (or a page that wraps each letter in a <span> reads as hundreds of one-letter words).
+      result.wordCount = countWords(tagsToText(visible));
     }
 
     // Headings
-    const h1Regex = /<h1[^>]*>([\s\S]*?)<\/h1>/gi;
-    let h1Match;
-    while ((h1Match = h1Regex.exec(html)) !== null) {
-      const t = cleanText(h1Match[1]);
-      if (t) result.headings.h1.push(t);
-    }
-
-    const h2Regex = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
-    let h2Match;
-    while ((h2Match = h2Regex.exec(html)) !== null) {
-      const t = cleanText(h2Match[1]);
-      if (t) result.headings.h2.push(t);
-    }
-
-    const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
-    let h3Match;
-    while ((h3Match = h3Regex.exec(html)) !== null) {
-      const t = cleanText(h3Match[1]);
-      if (t) result.headings.h3.push(t);
-    }
+    const headingTexts = (tag: 'h1' | 'h2' | 'h3', into: string[]) => {
+      for (const t of findTags(html, tag)) {
+        const text = cleanText(innerHtml(html, tag, t.end));
+        if (text) into.push(text);
+      }
+    };
+    headingTexts('h1', result.headings.h1);
+    headingTexts('h2', result.headings.h2);
+    headingTexts('h3', result.headings.h3);
 
     // JSON-LD structured data.
     // Schema blocks are almost never a bare `{"@type": "..."}`. The standard shapes are
@@ -357,7 +428,7 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
 
     const jsonLdRegex = /<script\s+[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
     let jsonLdMatch;
-    while ((jsonLdMatch = jsonLdRegex.exec(html)) !== null) {
+    while ((jsonLdMatch = jsonLdRegex.exec(withScripts)) !== null) {
       result.structuredData.hasJsonLd = true;
       try {
         collectLdTypes(JSON.parse(jsonLdMatch[1].trim()), result.structuredData.types);
@@ -366,27 +437,30 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
       }
     }
 
-    // Images
-    const imgRegex = /<img\s+([^>]*?)>/gi;
-    let imgMatch;
-    while ((imgMatch = imgRegex.exec(html)) !== null) {
-      const imgAttrs = imgMatch[1];
-      const srcMatch = imgAttrs.match(/src\s*=\s*["']([^"']*)["']/i);
-      const altMatch = imgAttrs.match(/alt\s*=\s*["']([^"']*)["']/i);
+    // Images. alt="" is the valid way to mark a decorative image, so it is counted apart from an
+    // image with no alt attribute at all (the real defect). `missingAlt` keeps its old meaning for
+    // the scoring and the model, but is now only the no-attribute case.
+    for (const { attrs } of findTags(html, 'img')) {
+      const srcset = attrs.srcset || attrs['data-srcset'] || '';
+      const lazySrc = attrs['data-src'] || attrs['data-lazy-src'] || srcset.trim().split(/[\s,]+/)[0] || '';
+      const own = attrs.src || '';
+      // A data: URI is a placeholder for the real, lazily loaded image.
+      const src = own && !(lazySrc && /^data:/i.test(own)) ? own : lazySrc;
+      if (!src) continue;
+      if (lazySrc && (!own || /^data:/i.test(own))) result.images.lazyNoSrc!++;
 
-      if (srcMatch) {
-        const src = srcMatch[1];
-        const alt = altMatch ? altMatch[1] : '';
-        const hasAlt = !!alt.trim();
-        result.images.total++;
-        if (!hasAlt) result.images.missingAlt++;
-        
-        // Cap visual list sizes to prevent huge payload
-        if (result.images.list.length < 30) {
-          result.images.list.push({ src, alt, hasAlt });
-        }
+      const alt = attrs.alt ?? '';
+      const hasAlt = !!alt.trim();
+      result.images.total++;
+      if (attrs.alt === undefined) result.images.noAltAttribute!++;
+      else if (!hasAlt) result.images.emptyAlt!++;
+
+      // Cap visual list sizes to prevent huge payload
+      if (result.images.list.length < 30) {
+        result.images.list.push({ src, alt, hasAlt });
       }
     }
+    result.images.missingAlt = result.images.noAltAttribute!;
 
     // Domain Parsing Helper
     let baseUrl;
@@ -395,52 +469,39 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
     } catch {
       baseUrl = { origin: '', hostname: '' };
     }
+    const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, '');
 
     // Links parsing
-    const linkRegex = /<a\s+([^>]*?)>([\s\S]*?)<\/a>/gi;
-    let linkMatch;
-    while ((linkMatch = linkRegex.exec(html)) !== null) {
-      const linkAttrs = linkMatch[1];
-      const linkText = cleanText(linkMatch[2]).slice(0, 50);
-      const hrefMatch = linkAttrs.match(/href\s*=\s*["']([^"']*)["']/i);
+    for (const a of findTags(html, 'a')) {
+      const href = (a.attrs.href ?? '').trim();
+      if (!href || href.startsWith('#') || /^(javascript|mailto|tel):/i.test(href)) continue;
+      const linkText = cleanText(innerHtml(html, 'a', a.end)).slice(0, 50);
 
-      if (hrefMatch) {
-        const href = hrefMatch[1].trim();
-        if (href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
-          continue;
-        }
+      let resolvedHref = href;
+      let isInternal = false;
+      try {
+        const parsedHref = new URL(href, url);
+        resolvedHref = parsedHref.toString();
+        const host = bareHost(parsedHref.hostname);
+        const base = bareHost(baseUrl.hostname);
+        isInternal = /^https?:$/.test(parsedHref.protocol) && !!base && (host === base || host.endsWith('.' + base));
+      } catch {
+        isInternal = false;
+      }
 
-        let resolvedHref = href;
-        let isInternal = false;
+      result.links.total++;
+      if (isInternal) {
+        result.links.internal++;
+      } else {
+        result.links.external++;
+      }
 
-        if (href.startsWith('/') || href.startsWith('.')) {
-          resolvedHref = resolvedHref.startsWith('/') 
-            ? `${baseUrl.origin}${href}` 
-            : new URL(href, url).toString();
-          isInternal = true;
-        } else {
-          try {
-            const parsedHref = new URL(href);
-            isInternal = parsedHref.hostname === baseUrl.hostname || parsedHref.hostname.endsWith('.' + baseUrl.hostname);
-          } catch {
-            isInternal = false;
-          }
-        }
-
-        result.links.total++;
-        if (isInternal) {
-          result.links.internal++;
-        } else {
-          result.links.external++;
-        }
-
-        if (result.links.list.length < 50) {
-          result.links.list.push({
-            href: resolvedHref,
-            type: isInternal ? 'internal' : 'external',
-            text: linkText || '[No Anchor Text]'
-          });
-        }
+      if (result.links.list.length < 50) {
+        result.links.list.push({
+          href: resolvedHref,
+          type: isInternal ? 'internal' : 'external',
+          text: linkText || '[No Anchor Text]'
+        });
       }
     }
   } catch (err) {
@@ -450,30 +511,12 @@ export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?
   return result;
 }
 
-/** True when robots.txt tells every crawler to stay out of the whole site. */
+/**
+ * True when robots.txt closes the whole site to every crawler: the "*" group disallows "/" and no named
+ * crawler group (Googlebot, Bingbot ...) grants any access. See robotsBlocksEveryone.
+ */
 export function robotsBlocksAll(robotsText: string): boolean {
-  let inWildcardGroup = false;
-  let sawRule = false;
-  for (const raw of robotsText.split(/\r?\n/)) {
-    const line = raw.replace(/#.*/, '').trim();
-    if (!line) continue;
-    const idx = line.indexOf(':');
-    if (idx < 0) continue;
-    const field = line.slice(0, idx).trim().toLowerCase();
-    const value = line.slice(idx + 1).trim();
-    if (field === 'user-agent') {
-      // Consecutive user-agent lines share one rule group; a user-agent after rules starts a new one.
-      if (sawRule) {
-        inWildcardGroup = false;
-        sawRule = false;
-      }
-      if (value === '*') inWildcardGroup = true;
-    } else if (field === 'disallow' || field === 'allow') {
-      sawRule = true;
-      if (inWildcardGroup && field === 'disallow' && value === '/') return true;
-    }
-  }
-  return false;
+  return robotsBlocksEveryone(robotsText);
 }
 
 export function securityHeadersFrom(headers: Record<string, string>, finalUrl: string): SecurityHeaders {
@@ -482,6 +525,7 @@ export function securityHeadersFrom(headers: Record<string, string>, finalUrl: s
     https: finalUrl.toLowerCase().startsWith('https://'),
     hsts: has('strict-transport-security'),
     csp: has('content-security-policy'),
+    cspReportOnly: has('content-security-policy-report-only'),
     xFrameOptions: has('x-frame-options') || /frame-ancestors/i.test(headers['content-security-policy'] || ''),
     xContentTypeOptions: /nosniff/i.test(headers['x-content-type-options'] || ''),
     referrerPolicy: has('referrer-policy')
@@ -503,10 +547,15 @@ export function findDuplicates(pages: CrawlPageData[], pick: (p: CrawlPageData) 
   return [...byValue.values()].filter((g) => g.urls.length > 1);
 }
 
+/** 404 / 410 / 5xx except 503 (a maintenance or bot-wall answer). 401, 403, 429, 999 and the like are NOT broken: they cannot be verified from here. */
+export function isBrokenStatus(status: number): boolean {
+  return status === 404 || status === 410 || (status >= 500 && status < 600 && status !== 503);
+}
+
 /**
  * Samples links from the main page and reports the ones that definitely fail. Deliberately
  * conservative — a false "broken link" is worse than a missed one:
- *  - only 404/410/5xx and DNS failures count (401/403/429 are bot-walls or auth, not breakage);
+ *  - only 404/410/5xx (not 503) and DNS failures count (401/403/429/503/999 are bot-walls or auth, not breakage);
  *  - timeouts and connection resets are ignored;
  *  - HEAD is retried as GET, since some servers reject HEAD outright.
  * Every request goes through safeFetch, so private destinations are refused like everywhere else.
@@ -521,7 +570,8 @@ export async function checkLinks(
   const sample: Array<{ href: string; type: 'internal' | 'external' }> = [];
   const taken = { internal: 0, external: 0 };
   for (const link of links) {
-    const href = link.href.split('#')[0];
+    // Hrefs stored by an older parser still carry entities ("?a=1&amp;b=2" is not the URL the browser requests).
+    const href = decodeHtml(link.href).split('#')[0];
     if (!/^https?:\/\//i.test(href) || seen.has(href)) continue;
     if (taken[link.type] >= limits[link.type]) continue;
     seen.add(href);
@@ -538,9 +588,14 @@ export async function checkLinks(
       if (res.status === 405 || res.status === 501 || res.status === 403) {
         res = await safeFetch(item.href, { method: 'GET', timeoutMs: 3000, maxBytes: 1024 });
       }
-      checked++;
-      onProbe?.(item.href, res.status);
-      if (res.status === 404 || res.status === 410 || res.status >= 500) {
+      // A failure is confirmed with one more GET before it is reported: a single 404/5xx can be a
+      // HEAD-hostile server or a transient fault.
+      if (isBrokenStatus(res.status)) res = await safeFetch(item.href, { method: 'GET', timeoutMs: 3000, maxBytes: 1024 });
+      onProbe?.(item.href, isBrokenStatus(res.status) || res.status < 400 ? res.status : `${res.status} (could not be verified)`);
+      // Bot walls answer 401/403/429/503/999 to a scanner and the real page to a browser: that is
+      // "unverified", not "broken", and it is not counted as a link that was checked.
+      if (res.status < 400 || isBrokenStatus(res.status)) checked++;
+      if (isBrokenStatus(res.status)) {
         broken.push({ href: item.href, status: res.status, type: item.type });
       }
     } catch (err: any) {
@@ -607,8 +662,9 @@ export function describePage(page: CrawlPageData, emit: Emit, headers?: Security
   // ── images ──────────────────────────────────────────────────────────────
   emit('images', 'start', 'scanning <img> tags');
   const im = page.images;
-  emit('images', im.missingAlt ? 'warn' : 'ok', `${im.total} image(s), ${im.missingAlt} without alt text`);
-  emit('images', 'done', `${im.missingAlt}/${im.total} missing alt`);
+  const noAttr = im.noAltAttribute ?? im.missingAlt;
+  emit('images', noAttr ? 'warn' : 'ok', `${im.total} image(s), ${noAttr} without alt text${im.emptyAlt ? `, ${im.emptyAlt} with empty alt (decorative, valid)` : ''}${im.lazyNoSrc ? `, ${im.lazyNoSrc} lazy-loaded (real source in data-src/srcset)` : ''}`);
+  emit('images', 'done', `${noAttr}/${im.total} no alt attribute`);
 
   // ── links (structure; the broken-link probe logs separately) ────────────
   emit('links', 'start', 'mapping links');
@@ -691,6 +747,7 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
         robotsText = text;
         emit('robots', 'ok', `/robots.txt → ${robotsRes.status} (${text.length} bytes)`);
         result.robotsBlocksAll = robotsBlocksAll(text);
+        result.robotsByCrawler = Object.fromEntries(BOTS.map((b) => [b.name, robotsAccess(text, b.token)]));
         if (result.robotsBlocksAll) emit('robots', 'warn', 'site-wide "Disallow: /" for all crawlers — nothing on this site can be indexed');
         else emit('robots', 'ok', 'no site-wide block for crawlers');
         const sitemapLine = text.split('\n').find(line => line.toLowerCase().startsWith('sitemap:'));
@@ -700,12 +757,20 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
         } else {
           emit('robots', 'info', 'no Sitemap: directive; falling back to /sitemap.xml');
         }
-      } else {
-        if (robotsRes.status === 404 || robotsRes.status === 410) robotsText = '';
+        result.robotsReadable = true;
+      } else if (robotsRes.status === 404 || robotsRes.status === 410) {
+        // Only "not found / gone" means the site publishes no rules (everything allowed).
+        robotsText = '';
+        result.robotsReadable = true;
         emit('robots', 'info', `/robots.txt → ${robotsRes.status} (no crawl rules published, so all crawlers are allowed)`);
+      } else {
+        // 401/403/406/418/429/5xx: the site refused or failed. Its rules are unknown, not absent.
+        result.robotsReadable = false;
+        emit('robots', 'warn', `/robots.txt could not be read: HTTP ${robotsRes.status} (the site refused or failed this request, so its crawl rules are unknown)`);
       }
     } catch (err: any) {
-      emit('robots', 'warn', `/robots.txt unreachable: ${clip(err?.message, 100)}`);
+      result.robotsReadable = false;
+      emit('robots', 'warn', `/robots.txt could not be read: ${clip(err?.message, 100)}`);
     }
 
     // Double check sitemap presence
@@ -719,14 +784,21 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
       if (sitemapRes.ok) {
         result.sitemapFound = true;
         result.sitemapUrl = sitemapLoc;
+        result.sitemapChecked = true;
         emit('robots', 'ok', `sitemap → ${sitemapRes.status} found`);
-      } else {
+      } else if ((sitemapRes.status === 404 || sitemapRes.status === 410) && result.robotsReadable) {
+        result.sitemapChecked = true;
         emit('robots', 'warn', `sitemap → ${sitemapRes.status} not found`);
+      } else {
+        // Refused/failed, or a 404 at the default path while robots.txt (which may name another location) was unreadable.
+        result.sitemapChecked = false;
+        emit('robots', 'warn', `sitemap could not be checked: HTTP ${sitemapRes.status}${result.robotsReadable ? '' : ' (robots.txt, which may name it, was unreadable too)'}`);
       }
     } catch (err: any) {
-      emit('robots', 'warn', `sitemap unreachable or blocked: ${clip(err?.message, 100)}`);
+      result.sitemapChecked = false;
+      emit('robots', 'warn', `sitemap could not be checked: ${clip(err?.message, 100)}`);
     }
-    emit('robots', 'done', result.sitemapFound ? 'sitemap found' : 'no sitemap');
+    emit('robots', 'done', result.sitemapFound ? 'sitemap found' : result.sitemapChecked ? 'no sitemap' : 'sitemap could not be checked');
   })();
 
   // Check for /llms.txt. The report used to assert "no llms.txt / no AI-crawler directives"
@@ -736,9 +808,13 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
     try {
       const llmsRes = await safeFetch(`${originUrl.origin}/llms.txt`, { timeoutMs: 3000, maxBytes: 512 * 1024 });
       result.llmsTxtFound = llmsRes.ok;
-      emit('llms', llmsRes.ok ? 'ok' : 'info', llmsRes.ok ? `/llms.txt → ${llmsRes.status} present (${llmsRes.text.length} bytes)` : `/llms.txt → ${llmsRes.status} not published`);
+      result.llmsChecked = llmsRes.ok || llmsRes.status === 404 || llmsRes.status === 410;
+      if (llmsRes.ok) emit('llms', 'ok', `/llms.txt → ${llmsRes.status} present (${llmsRes.text.length} bytes)`);
+      else if (result.llmsChecked) emit('llms', 'info', `/llms.txt → ${llmsRes.status} not published`);
+      else emit('llms', 'info', `/llms.txt could not be read: HTTP ${llmsRes.status} (the site refused or failed this request, so it is unknown whether the file exists)`);
     } catch (err: any) {
-      emit('llms', 'info', `/llms.txt unreachable: ${clip(err?.message, 100)}`);
+      result.llmsChecked = false;
+      emit('llms', 'info', `/llms.txt could not be read: ${clip(err?.message, 100)}`);
     }
   })();
   await Promise.all([robotsAndSitemap, llmsCheck]);
@@ -748,10 +824,49 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
   let realPage = false;
   try {
     emit('render', 'info', `navigating to ${clip(originUrl.toString(), 80)} (wait for network idle, 15s timeout)`);
-    const rendered = await renderPage(originUrl.toString(), 15000, emit);
-    const hops = rendered.redirectChain.length - 1;
+    let rendered = await renderPage(originUrl.toString(), 15000, emit);
+    // A refusal or bot wall may be specific to one client identity (Canva wants a Chrome token,
+    // W3C challenges Chrome-looking agents but accepts ours). Try ONE other honest browser identity
+    // before giving up on the page; we never present ourselves as a search-engine crawler.
+    const wallOf = (r: RenderedPage) => {
+      const p = parsePage(originUrl.toString(), r.html, r.loadTimeMs, r.ttfbMs, r.visibleText);
+      return classifyChallenge({ status: r.status, title: p.meta.title, h1: p.headings.h1, bodyText: r.visibleText ?? '', robots: p.meta.robots });
+    };
+    const firstWall = wallOf(rendered);
+    if (firstWall || [401, 403, 406, 429, 503].includes(rendered.status)) {
+      emit('render', 'warn', `${firstWall ? 'bot challenge' : `HTTP ${rendered.status}`} on the first request: trying once more with a standard browser identity`);
+      try {
+        const second = await renderPage(originUrl.toString(), 15000, emit, RETRY_USER_AGENT);
+        if (!wallOf(second) && (second.ok || !rendered.ok)) {
+          rendered = second;
+          emit('render', 'ok', 'the second identity received the real page');
+        } else {
+          emit('render', 'warn', 'the second identity was refused or challenged too: keeping the first answer');
+        }
+      } catch (err) {
+        if (err instanceof SsrfBlockedError) throw err;
+        emit('render', 'info', `the second attempt failed (${clip((err as Error)?.message, 80)}): keeping the first answer`);
+      }
+    }
+    const hops =rendered.redirectChain.length - 1;
     emit('render', rendered.ok ? 'ok' : 'warn', `HTTP ${rendered.status} · DOM captured (${Math.round((rendered.html.length / 1024) * 10) / 10}KB)`);
     emit('render', hops > 0 ? (hops > 2 ? 'warn' : 'info') : 'ok', hops > 0 ? `${hops} redirect hop(s): ${rendered.redirectChain.map((u) => clip(u, 50)).join(' → ')}` : 'no redirects');
+
+    // Is this the site, or a bot wall standing in front of it? Judged from the page as received,
+    // before anything is measured, so the report can say so instead of auditing the wall.
+    const probe = rendered.ok ? null : parsePage(originUrl.toString(), rendered.html, rendered.loadTimeMs, rendered.ttfbMs, rendered.visibleText);
+    const noteChallenge = (p: CrawlPageData) => {
+      const reason = classifyChallenge({
+        status: rendered.status, title: p.meta.title, h1: p.headings.h1,
+        bodyText: rendered.visibleText ?? '', robots: p.meta.robots
+      });
+      result.pageKind = reason ? 'challenge' : 'normal';
+      if (reason) {
+        result.challengeReason = reason;
+        emit('render', 'warn', `this looks like a bot challenge or blocked page, not the site itself (${reason}): the figures below describe that page`);
+      }
+    };
+    if (probe) noteChallenge(probe);
 
     if (!rendered.ok) {
       // Target responded with a non-OK status (e.g. 403/404/500). We still don't have real page
@@ -759,10 +874,14 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
       emit('render', 'fail', `page answered ${rendered.status}: no usable content, so PLACEHOLDER data is used and the report will be flagged as simulated`);
       result.mainPage = createMockPage(originUrl.toString(), rendered.status, rendered.loadTimeMs);
     } else {
-      result.mainPage = parsePage(originUrl.toString(), rendered.html, rendered.loadTimeMs, rendered.ttfbMs);
+      result.mainPage = parsePage(originUrl.toString(), rendered.html, rendered.loadTimeMs, rendered.ttfbMs, rendered.visibleText);
+      noteChallenge(result.mainPage);
       result.mainPage.status = rendered.status;
       result.mainPage.webVitals = rendered.webVitals;
+      result.mainPage.transferKb = rendered.transferKb;
+      result.mainPage.requestCount = rendered.requestCount;
       result.redirectChain = rendered.redirectChain;
+      result.redirectHops = rendered.redirectChain.length - 1; // the chain lists the start URL too: N URLs = N-1 hops
       result.securityHeaders = securityHeadersFrom(rendered.headers, rendered.redirectChain[rendered.redirectChain.length - 1]);
       realPage = true;
       // Measured evidence the report is checked against: raw vs rendered content, structured-data
@@ -773,8 +892,10 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
           origin: originUrl.origin,
           robotsText,
           renderedHtml: rendered.html,
+          renderedText: rendered.visibleText,
           renderedStatus: rendered.status,
-          hreflangCount: result.mainPage.hreflang?.length ?? 0,
+          userAgent: rendered.userAgent,
+          hreflangCount: result.mainPage.hreflangTotal ?? result.mainPage.hreflang?.length ?? 0,
           emit
         });
       } catch (err: any) {
@@ -825,7 +946,7 @@ export async function crawlUrl(targetUrl: string, mode: ScanMode, depth: number,
         emit('links', 'info', `page ${n + 1}/${uniqueCandidates.length}: ${clip(linkUrl, 80)}`);
         const rendered = await renderPage(linkUrl, 10000);
         if (rendered.ok) {
-          const page = parsePage(linkUrl, rendered.html, rendered.loadTimeMs, rendered.ttfbMs);
+          const page = parsePage(linkUrl, rendered.html, rendered.loadTimeMs, rendered.ttfbMs, rendered.visibleText);
           result.additionalPages.push(page);
           emit('links', 'ok', `HTTP ${rendered.status} · ${page.wordCount ?? 0} words · ${page.headings.h1.length} H1 · title "${clip(page.meta.title, 50)}"`);
         } else {

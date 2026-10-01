@@ -71,4 +71,22 @@ Added by the checker: search/assistant crawlers blocked
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R4. Counts: ACCURATE 3, INACCURATE 4, MISLEADING 3, UNSUPPORTED 0, SUBJECTIVE 3.
+
+The headline finding (Googlebot "blocked") is false: the probe got no response (status 0, an error or timeout in the 5 s probe, run 13-wide in parallel), the code treats status 0 as a refusal, and there is no retry. Live check: Googlebot UA against https://www.cloudflare.com/ returned HTTP 200 three times in a row (0.5-0.65 s); ground truth also 200. A-02 confirmed. The two Googlebot findings and fix 6 are therefore wrong, and the "highest-risk finding in this audit" is an artefact. The AI text hedges ("or timeout") but the measured finding the checker substituted does not.
+
+Measurement mismatches explained: (a) Googlebot 0 vs 200 = transient probe failure, scanner bug (A-02). (b) Images 68 vs 71 and "missing alt" 1 vs 4: the site serves a variant; my own live puppeteer load (scanner UA) found 68 img, 0 without an alt attribute, 1 with alt="" (hero-poster.avif, decorative). So the scanner's "1 missing" is that alt="" image (A-08), not a missing attribute; ground's 71/2+2 came from a different variant of the page. (c) visible words 1506 vs 1510 within tolerance.
+
+1. INACCURATE: Googlebot got HTTP 200 live (3/3) and in ground truth; the "refusal" was a failed probe (status 0), A-02.
+2. INACCURATE: single failed probe presented as the highest-risk finding; live Googlebot = 200. The "WAF/timeout" hedge does not rescue a critical severity.
+3. ACCURATE: two H1s verified (ground and live DOM). Severity "critical" is inflated, the text itself says it is not a ranking penalty (A-13).
+4. INACCURATE: the one image is alt="" (valid decorative hero poster), not missing alt (A-08); also "critical" for something the text calls non-critical (A-13).
+5. MISLEADING: "no ... features or reviews sections" comes from heading keyword matching; the page has "Why choose Cloudflare", "Run everywhere ..." feature blocks and a named customer testimonial (Shopify quote). FAQ and how-it-works absence is true (no FAQ text in the live DOM). Critical severity unjustified.
+6. INACCURATE: Googlebot is not refused (200 x3 live); "HTTP no response" is a probe failure.
+7. ACCURATE: two H1s, text and numbers right; recommendation reasonable (and honestly says not a ranking penalty).
+8. MISLEADING: says "no alt attribute"; the image has alt="" which is valid for decorative (A-08). The advice hedges decorative, but the count is a wrong defect.
+9. SUBJECTIVE: reasonable AEO suggestion; premise (no FAQ, no FAQPage) is true.
+10. SUBJECTIVE: reasonable; schema types listed correctly (Organization, WebSite, SearchAction, WebPage), no offers/rating on entities is true.
+11. SUBJECTIVE: weak but hedged ("machine-readability only"); premise howItWorks:false is a heuristic.
+12. ACCURATE: TTFB 293, load 1644, LCP 624, CLS 0, 17.8% share all match the data. Filler (a "keep doing" item, not a fix) but true.
+13. MISLEADING: two small errors: "single-hop redirect chain" (events: "no redirects"; chain length 1 = the URL itself) and "10 locales plus x-default" (the list has 9 locales plus x-default). Headers, canonical, lang, 19-link sample (0 broken; 403s on dash.cloudflare.com not counted) are right. The hreflang flag is noise.

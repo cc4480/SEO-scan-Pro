@@ -31,6 +31,7 @@ scripts/audit-corpus/review.ts  compare + claim flags              -> docs/accur
 | A-11 | Other count mismatches: H2, links, images with src (lazy `data-src`), H1 | 12, 16, 18, 24, 30 |
 | A-12 | Ground-truth tool defects (my tool): robots "disallow all" regex false positives; bot baseline logic | 8 sites |
 | A-13 | Severity inflation: minor items marked "critical" | 01, 03 |
+| A-15 | A crawler the site explicitly disallows in robots.txt (and refuses) is enforced policy, not an error: no critical/high finding or score deduction, and no "robots does not explicitly disallow" claim | 04 |
 | A-14 | Attribute parser stops at an apostrophe inside a double-quoted value (meta description "world's" => "world") | 03, 13, 18 |
 
 ## Work packages and owners

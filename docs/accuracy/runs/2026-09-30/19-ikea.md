@@ -65,4 +65,17 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Counts: ACCURATE 3, INACCURATE 4, MISLEADING 2, UNSUPPORTED 0, SUBJECTIVE 1.
+
+**Mismatches explained (live: puppeteer 1366x900, curl).** All measurements agree within tolerance; no challenge or variant. H2 16 vs 15: the scanner's list includes the duplicated "Furniture and inspiration..." heading and "Footer" (a hidden duplicate); trivial. Words 2,323 vs 2,173 and raw 1,564 vs 1,445: small A-09/A-10 overcount (~7%). Images 145/145, alt: 41 = 1 no attribute + 40 `alt=""`; I inspected them: the empties are category and logo images inside links that already carry the text label ("Sofas & armchairs", "IKEA Home"...), the correct pattern; the single no-attribute `<img>` is `style="display:none" aria-hidden="true"` (a preload). `hreflang` none, twitter:card none (confirmed). Nav buttons: 10 at desktop (Search, Open navigation menu, Cookie settings, USEnglish, store selector), 14 at the scanner's width.
+
+1. INACCURATE: "41 of 145 missing the alt attribute" is wrong, 1 lacks it (hidden, aria-hidden), 40 are decorative `alt=""` inside labelled links (A-08); not an accessibility defect.
+2. INACCURATE: the 14 buttons are search, menu toggle, cookie and locale controls, not navigation destinations; the raw HTML already has 185 links, so "invisible to crawlers" is false (R3-04).
+3. SUBJECTIVE: llms.txt is 404 (true) but an optional, unproven convention; "critical" is not reasonable (A-13).
+4. INACCURATE: same as 1; the remediation would add alt text to decorative images that are already correct.
+5. MISLEADING: the numbers (1,564/2,332 words, 185/217 links, ~768 words, 32 links) are as measured and the medium rating is fair, but the "14 navigation controls are buttons" clause is the false R3-04 heuristic and the word figures include hidden text.
+6. ACCURATE: `/llms.txt` 404 for a browser UA; advice generic but harmless.
+7. ACCURATE: no `twitter:*` meta tags on the live page; og tags present.
+8. ACCURATE: no Referrer-Policy on the GET response; the rest of the security headers present.
+9. INACCURATE: the "FAQ" signal comes from a footer link to another page (`<a>FAQ</a>`), the homepage has no FAQ content to mark up (A-05); FAQPage markup would be invalid without visible Q&A.
+10. MISLEADING: 1,749 ms load / 239 ms TTFB is a good result; "86% is network and transfer" is an inference from `1 - ttfb/load` (load also includes parsing, script and images) and 1,962.8 KB is the serialized DOM, not transfer (R3-08); the "host-measured" hedge does not cure the implied problem.

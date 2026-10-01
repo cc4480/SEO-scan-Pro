@@ -70,4 +70,32 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R2. Counts: ACCURATE 5, INACCURATE 4, MISLEADING 2, UNSUPPORTED 1, SUBJECTIVE 4.
+Summary: the biggest defect is a parser bug: GOV.UK writes `<meta name="title" property="og:title" ...>` and
+`<meta name="description" property="og:description" ...>`; the scanner reads `attrs.name || attrs.property`, so
+the `name` wins and og:title / og:description are read as empty. The report then raised a critical issue and a
+high fix for metadata that exists. Alt text again counts valid `alt=""` as missing (A-08) and the fix invents
+image identities ("crown logo"). CLS 0.439 is real in the lab (I measured 0.44 at the default 800x600 viewport,
+0.24 at 1366x900), and it is honestly labelled lab data.
+
+Measurement mismatches explained: words 852/855/806 vs 582/582/536: the scanner counts display:none text
+(menu 105, feedback forms 38+31, cookie confirmation 28, assistive hints 52 ... = 271 hidden words, A-09,
+scanner bug). robots "blocks all" false vs true: ground-truth bug (A-12); the `*` group only has
+`Disallow: /*/print$` and `/search/all*`. OG title/description: scanner bug above.
+
+1. MISLEADING: no JSON-LD is true (ground 0) but "invisible to schema-driven entity extraction" and critical are overstated (A-13).
+2. INACCURATE: all 4 images are `alt=""` (feature promo images beside text, app icon): deliberate decorative markup, "accessibility failure" is false (A-08).
+3. ACCURATE: llms.txt 404; critical inflated (A-13).
+4. INACCURATE: og:title ("Welcome to GOV.UK") and og:description are present in the HTML (verified with curl); only og:type and twitter:card are absent. Scanner parser bug (new defect N2).
+5. ACCURATE: CLS 0.439 reproduced in the lab (0.44); correctly labelled lab data. Critical is generous but caveated.
+6. SUBJECTIVE: no FAQ is true; "high-value direct-answer surface" and critical are judgements (A-13).
+7. ACCURATE: zero JSON-LD, raw and rendered.
+8. SUBJECTIVE: absence is true; "high" priority is not reasonable.
+9. INACCURATE: images have `alt=""` not missing; the remediation names "the GOV.UK crown logo, the Open Graph preview image" but the 4 images are find-a-job, national-insurance and cost-of-living promos plus the app icon (invented).
+10. INACCURATE: see 4; og:title/og:description exist, and they match the title/description the fix says to copy.
+11. ACCURATE: same data as 5; "reserve width/height on the 4 images" is speculative but harmless.
+12. SUBJECTIVE: faq false is true; advice is a judgement.
+13. SUBJECTIVE: title/description quoted correctly; the H3 categories exist; rewriting is opinion.
+14. UNSUPPORTED: the 4 buttons are cookie, menu, search toggle and feedback controls (live check); menu links exist as `<a>` in the no-JS HTML (rawLinks 106 = rendered 106). Nothing shows a URL-leading control implemented as a button.
+15. MISLEADING: no structured data is true, but Google retired the sitelinks search box that SearchAction fed (2024), and breadcrumbs on "subpages" are outside the audited page.
+16. ACCURATE: loadTimeMs 1456 and ttfbMs 1140 are the recorded values (78%); explicitly caveated as scanner-host latency.

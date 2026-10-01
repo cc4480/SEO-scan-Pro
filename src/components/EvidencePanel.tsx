@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import type { CrawlResult, DeepSeekSeoReport } from '../types';
+import { botVerdict, classifyBots } from '../../lib/audit/botVerdict';
 
 // Measured evidence behind the report. Everything here comes from direct requests and parsing (see
 // lib/audit), not from the AI. Scans stored before it existed have no `facts` and simply omit the
@@ -32,6 +33,14 @@ export default function EvidencePanel({ crawl, report }: { crawl?: CrawlResult; 
   const removed = report.qa?.removed ?? [];
   const measured = report.scoreMethod === 'measured';
   const blocked = bots?.results.filter((r) => r.blocked) ?? [];
+  const cls = bots ? classifyBots(bots) : null;
+  const challenge = crawl.pageKind === 'challenge';
+  const unreadable = [
+    crawl.robotsReadable === false && 'robots.txt',
+    crawl.sitemapChecked === false && 'the sitemap',
+    crawl.llmsChecked === false && 'llms.txt'
+  ].filter(Boolean) as string[];
+  const demoted = report.qa?.demoted ?? [];
 
   return (
     <div className="glass-card rounded-2xl p-6 shadow-lg space-y-6 animate-fadeIn">
@@ -43,7 +52,9 @@ export default function EvidencePanel({ crawl, report }: { crawl?: CrawlResult; 
       <div className="space-y-3">
         <div className={`rounded-lg border p-3 text-xs ${measured ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100' : report.scoreMethod === 'illustrative' ? 'border-amber-400/30 bg-amber-400/10 text-amber-100' : 'border-slate-500/30 bg-slate-500/10 text-slate-300'}`}>
           {measured && 'Scores are computed by fixed rules from the checks measured in this scan, not estimated by an AI. Every deduction is listed below, so the same site always scores the same.'}
-          {report.scoreMethod === 'illustrative' && 'The site could not be reached, so these scores are illustrative placeholders, not measurements.'}
+          {report.scoreMethod === 'illustrative' && (challenge
+            ? `The site served a bot challenge${crawl.challengeReason ? ` (${crawl.challengeReason})` : ''}, so the real page could not be audited. The scores are illustrative placeholders, not measurements.`
+            : 'The site could not be reached, so these scores are illustrative placeholders, not measurements.')}
           {!report.scoreMethod && 'This report predates computed scores: its numbers were estimated by the AI model and can vary between runs. Re-run the audit for measured scores.'}
         </div>
         {measured && report.scoreBreakdown && (
@@ -74,6 +85,12 @@ export default function EvidencePanel({ crawl, report }: { crawl?: CrawlResult; 
         )}
       </div>
 
+      {unreadable.length > 0 && (
+        <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] text-amber-100">
+          {unreadable.join(', ')} could not be read (the request was refused or failed), so nothing is reported about whether {unreadable.length === 1 ? 'it exists' : 'they exist'} or what {unreadable.length === 1 ? 'it contains' : 'they contain'}, and no score points were deducted for it.
+        </p>
+      )}
+
       {/* Crawler access */}
       {bots && (
         <div className="space-y-3">
@@ -84,21 +101,40 @@ export default function EvidencePanel({ crawl, report }: { crawl?: CrawlResult; 
                 <tr><th className="px-3 py-2 font-semibold">Crawler</th><th className="px-3 py-2 font-semibold">Type</th><th className="px-3 py-2 font-semibold">Result</th><th className="px-3 py-2 font-semibold">robots.txt</th></tr>
               </thead>
               <tbody>
-                {bots.results.map((r) => (
+                {bots.results.map((r) => {
+                  const verdict = botVerdict(r, bots);
+                  const label = verdict === 'ok' ? `OK (${r.status})`
+                    : verdict === 'inconclusive' ? `Refused, cannot confirm (${r.status || 'no response'})`
+                    : verdict === 'policy' ? `Refused, as robots.txt asks (${r.status || 'no response'})`
+                    : `Blocked (${r.status || 'no response'})`;
+                  const tone = verdict === 'ok' ? 'text-emerald-300' : verdict === 'genuine' ? 'text-rose-300' : 'text-amber-200';
+                  return (
                   <tr key={r.name} className="border-t border-white/5">
                     <td className="px-3 py-1.5 font-semibold text-slate-200">{r.name}</td>
                     <td className="px-3 py-1.5 text-slate-400">{ROLE_LABEL[r.role]}</td>
-                    <td className={`px-3 py-1.5 font-bold ${r.blocked ? 'text-rose-300' : 'text-emerald-300'}`}>{r.blocked ? `Blocked (${r.status || 'no response'})` : `OK (${r.status})`}</td>
+                    <td className={`px-3 py-1.5 font-bold ${tone}`}>{label}</td>
                     <td className="px-3 py-1.5 text-slate-400">{r.robotsAllows === null ? 'unreadable' : r.robotsAllows ? 'allowed' : 'disallowed'}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          {bots.conflicts.length > 0 && (
-            <p className="text-[11px] text-amber-200">robots.txt allows {bots.conflicts.join(', ')}, but the site refuses them anyway (often a CDN bot-protection setting).</p>
+          {cls.conflicts.length > 0 && (
+            <p className="text-[11px] text-amber-200">robots.txt allows {cls.conflicts.join(', ')}, but the site refuses them anyway (often a CDN bot-protection setting).</p>
           )}
-          {blocked.length > 0 && blocked.every((r) => r.role === 'training') && (
+          {cls.inconclusive.length > 0 && (
+            <p className="text-[11px] text-amber-200">
+              {bots.baselineRefused
+                ? 'The site refuses ordinary non-browser requests too, so these results cannot show which crawlers are welcome.'
+                : `${cls.inconclusive.map((r) => r.name).join(', ')} refused an imitation of their user agent. These crawlers are verified by IP address, so that is expected and does not show they are blocked.`}
+              {' '}To confirm, check Google Search Console, Bing Webmaster Tools or your server logs. These refusals cost no score points.
+            </p>
+          )}
+          {cls.policy.length > 0 && (
+            <p className="text-[11px] text-slate-400">{cls.policy.map((r) => r.name).join(', ')} {cls.policy.length === 1 ? 'is' : 'are'} disallowed in robots.txt and also refused: that is the site&rsquo;s own policy being enforced, not an error.</p>
+          )}
+          {blocked.length > 0 && blocked.every((r) => r.role === 'training') && cls.inconclusive.length === 0 && (
             <p className="text-[11px] text-slate-400">Only AI-training crawlers are refused; search and assistant crawlers get through, so answer-engine citation is not blocked. Whether to block training crawlers is the owner&rsquo;s choice.</p>
           )}
         </div>
@@ -133,6 +169,17 @@ export default function EvidencePanel({ crawl, report }: { crawl?: CrawlResult; 
             <p key={inv.type} className="text-[11px] text-amber-200">{inv.type} markup describes {inv.items.length} of {inv.total} item(s) that are not visible on the page, e.g. &ldquo;{inv.items[0]}&rdquo;.</p>
           ))}
         </div>
+      )}
+
+      {demoted.length > 0 && (
+        <details className="rounded-lg border border-white/10 bg-white/[0.02]">
+          <summary className="cursor-pointer select-none px-4 py-3 text-xs font-bold text-slate-200 hover:text-white">
+            {demoted.length} item{demoted.length === 1 ? ' was' : 's were'} moved from critical to recommended fixes (not a measured severe defect)
+          </summary>
+          <ul className="space-y-2 px-4 pb-4 text-[11px] text-slate-300">
+            {demoted.map((r, i) => <li key={i}><span className="font-semibold text-slate-200">{r.title}</span></li>)}
+          </ul>
+        </details>
       )}
 
       {/* What the checker removed */}

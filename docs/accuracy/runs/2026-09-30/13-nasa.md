@@ -73,4 +73,27 @@ Added by the checker: AI-training crawler block
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R2. Counts: ACCURATE 7, INACCURATE 1, MISLEADING 2, UNSUPPORTED 1, SUBJECTIVE 2.
+Summary: the page facts are right (no H1, 12 H2, headers, JSON-LD, links). Problems: 33 "missing alt"
+images are `alt=""` (A-08); the Bytespider 429 is a single non-reproducible response turned into "refused"
+(A-02); llms.txt and heading counts are marked critical (A-13); the displayed word counts are not
+quoted in findings except fix 13.
+
+Measurement mismatches explained: visible words 1629 vs 663, raw 1616 vs 643, rendered 1630 vs 663:
+the scanner counts text inside `display:none` mega-menu submenus (511 + 302 + 64 + 28 + 23 ... = 970 hidden
+words, verified with a live DOM walk) that innerText excludes (A-09, scanner bug). Raw-vs-rendered conclusion
+(server-rendered) still holds because both sides are inflated equally.
+
+1. ACCURATE: no H1 (ground 0; 12 H2 and 86 H3).
+2. MISLEADING: 33 of 74 are `alt=""` (decorative), 0 lack the attribute (A-08). "Critical" not justified.
+3. ACCURATE: llms.txt 404; severity "critical" is inflated (A-13).
+4. ACCURATE: live response has HSTS and X-Frame-Options only; CSP, X-Content-Type-Options, Referrer-Policy absent. "Critical" is inflated (A-13).
+5. SUBJECTIVE: 12 H2 and 86 H3 are real (many H3 sit in hidden menus) and "Highlights/Featured" repeat, but critical is not reasonable; "Image Of The Day" is an H2 (x2) and "Today" an H3, loosely described.
+6. MISLEADING: one 429 for Bytespider in both runs, but 5 later requests with the same UA all got 200 (not reproducible): a rate-limit/transient (A-02), not "refused". Also ungrammatical ("Bytespider ... were refused"). The 6 ⚠ flags are noise (the sentence says those crawlers were let through).
+7. ACCURATE: zero H1 confirmed; example text is only a suggestion.
+8. INACCURATE: "33 of 74 images have no alt attribute": none lacks the attribute, all 33 have `alt=""`; the text then concedes alt="" is valid for decorative images, which is what they have.
+9. UNSUPPORTED: fact (404) true; "improving retrieval accuracy in ChatGPT Search, Perplexity, Gemini" is not evidenced (no tested crawler consumes llms.txt) and "high" priority is not justified.
+10. ACCURATE: same facts as 4; medium is reasonable.
+11. SUBJECTIVE: duplicated labels are real (e.g. "Highlights", "Featured"); advice is a judgement.
+12. ACCURATE: schema list and the Article properties match ground (Organization, WebSite, SearchAction, WebPage, Article, Person, ImageObject).
+13. ACCURATE: raw and rendered links (283/283) and schema identical, i.e. server-rendered; the word numbers (1,616/1,630) are inflated by hidden text (A-09) but the conclusion is correct.

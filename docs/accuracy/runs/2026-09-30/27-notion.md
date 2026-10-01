@@ -75,4 +75,23 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R5. Counts: ACCURATE 3, INACCURATE 2, MISLEADING 5, UNSUPPORTED 0, SUBJECTIVE 4.
+
+Summary: measurements agree with ground truth within tolerance. Mismatches explained: images 60/51 vs 61/52 (+-1 lazy/A-B load, ignore); visible words 426 vs 345 (and 435 vs 345): the scanner counts hidden menu text, my own puppeteer run gives 345 again (A-09); raw words/links 459/104 vs 385/92 (A-10); "robots.txt blocks all" true in ground is a ground-tool bug: the live file (1136 bytes, same as the scanner saw) has "User-agent: * / Allow: /" plus specific Disallows, and the ground file was produced by the old regex (A-12). Googlebot/Bingbot/Bytespider 403: reproduced live with curl (spoofed UA, 403); Googlebot and Bingbot are IP-verified so this proves nothing about the real crawlers (A-02). Real alt state: 60 images, 2-3 without an alt attribute, 49 with alt="" (decorative).
+
+Two real defects: the two "404" links are not broken (see 2), and the headline crawler/alt criticals overstate.
+
+1. MISLEADING: spoofed Googlebot/Bingbot requests from a non-Google IP get 403 (reproduced); Notion is indexed by both, and these are the IP-verified crawlers (A-02). Only Bytespider is a plain UA block.
+2. INACCURATE: https://www.notion.so/product/features and /product/demos answer 404 only to a HEAD request; a GET (what a browser or crawler sends) returns 301 -> https://www.notion.com/product/features, then 200 (same for demos; verified with curl GET and browser UA, curl -I gives 404). The link prober trusts HEAD (lib/crawler.ts:537). Not broken links.
+3. MISLEADING: same Googlebot/Bingbot spoof (A-02); duplicates 1 and 6; exposes raw field name "robotsTxtAllows" to the user; "a contradiction that must be resolved" overstates a result that is expected for IP-verified bots.
+4. MISLEADING: 49 of the 51 are alt="" (valid, decorative); only 2-3 have no alt attribute. Calling it "no alt text" and "critical" is wrong (A-08, A-13).
+5. SUBJECTIVE: the page really is short (345 words in a real browser; scanner said 426, A-09), "thin for competitive queries" is a reasonable judgement but not critical (A-13).
+6. MISLEADING: duplicate of 1/3; same A-02 problem; the statement "pages they cannot fetch cannot be indexed" is not shown for the real crawlers.
+7. ACCURATE: Bytespider gets 403 (reproduced) while robots.txt allows it; the sentence correctly says search/assistant crawlers got 200. The six checker flags are false positives (they match "were let through").
+8. INACCURATE: repeats 2; the "fix" would have the owner repair links that work. (Also the guess about the domain migration is moot.)
+9. ACCURATE: no JSON-LD, raw or rendered (scanner and ground agree, 0 types). Priority medium is reasonable.
+10. MISLEADING: says "no alt attribute" for 51; only 2-3 lack the attribute, 49 are decorative empty alts (A-08). It does hedge ("decorative images legitimately use empty alt") so less harmful than 4.
+11. SUBJECTIVE: "426 words" is the overcounted figure (real 345), and the checker's "quotes 1200 words" flag is a false positive: 800-1200 is the recommended target, not a measurement. The advice to add copy is a reasonable judgement.
+12. SUBJECTIVE: FAQPage markup is optional AEO advice; "makes several implicit claims" is filler. Hedging on Google rich results is correct.
+13. SUBJECTIVE: the report itself says "this is not a defect"; it is padding. Details are slightly off: it is one redirect hop (307, temporary, not the 301 it tells the owner to keep) and the 89 internal links do point at notion.so (true).
+14. ACCURATE: final page https://www.notion.com/ has no X-Content-Type-Options header (the redirect response has it); HSTS/CSP/referrer confirmed present. Low priority is right.

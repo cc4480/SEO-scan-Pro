@@ -71,4 +71,21 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R4. Counts: ACCURATE 8, INACCURATE 2, MISLEADING 2, UNSUPPORTED 0, SUBJECTIVE 0.
+
+robots.txt, verified live: HTTP 200, 2,873 bytes (same with no UA, node UA and the scanner UA today; the scanner got 406 during the scan, which per ssrfGuard's comment was the missing User-Agent). It does NOT disallow everything for `*` (ground's "robots blocks all = true" is a ground-tool bug, A-12: the `Disallow: /` belongs to a long named-bot group). That named group explicitly disallows ClaudeBot, anthropic-ai, Claude-SearchBot, Claude-User, PerplexityBot, CCBot, Bytespider and others (not GPTBot, OAI-SearchBot or Perplexity-User). It declares two sitemaps (http://www.theguardian.com/sitemaps/news.xml and video.xml, both 200 live); /sitemap.xml is 404. So: the scanner's "robots.txt: no rules, all crawlers allowed" and "sitemap not found" are wrong (A-01), and "robots.txt allows them, so the site says welcome then refuses" is false for ClaudeBot, CCBot, Bytespider, Claude-SearchBot, PerplexityBot and Claude-User: the 403s are the site enforcing its stated policy. The 403s themselves are real: ClaudeBot, Claude-User, PerplexityBot and Perplexity-User UAs got 403, GPTBot 200 (my curl).
+
+Other mismatches: images 111 vs 112, links 348 vs 349: trivial. Missing alt 1 = alt="" (ground: no attr 0, empty 1), A-08. Section signals (faq/reviews/features true) are wrong, see new defect R4-02. og/twitter: none in raw HTML (only twitter:dnt), no JSON-LD, no H1: scanner, ground and 1.2 MB raw HTML all agree.
+
+1. MISLEADING: the four refusals are real (403 verified) but framed as a misconfiguration to fix; robots.txt explicitly disallows Claude-SearchBot, PerplexityBot and Claude-User and the 403s are deliberate (Perplexity-User is not listed).
+2. ACCURATE: 7 UAs get HTTP 403 (verified for 4 of them live); the claim stops at "preventing access", which is true. Duplicates 1.
+3. ACCURATE: no JSON-LD in the raw HTML or rendered DOM. "Critical" is generous (A-13).
+4. ACCURATE: no H1 (ground 0, raw HTML 0). "Critical" is generous (A-13).
+5. ACCURATE: no og: or twitter:card meta tags in the page (only twitter:dnt). "Empty" means absent.
+6. INACCURATE: "robots.txt allows them" is false for 3 of the 4 listed (Claude-SearchBot, PerplexityBot, Claude-User are explicitly Disallow: /). Advice to let them through contradicts the publisher's declared policy (A-01 root cause: 406 read as "no rules").
+7. INACCURATE: "refused even though robots.txt does not disallow them" is false: ClaudeBot, CCBot and Bytespider are all explicitly disallowed. The statement about Googlebot/Bingbot/Applebot/OAI-SearchBot/ChatGPT-User being let through is true (the flags are noise).
+8. ACCURATE: no JSON-LD (see 3). Advice (WebSite/NewsArticle) reasonable.
+9. ACCURATE: no H1; the suggested H1 text is reasonable.
+10. ACCURATE: no OG/Twitter tags; advice correct.
+11. MISLEADING: the one image has alt="" (valid decorative), not missing alt (A-08).
+12. ACCURATE: CLS 0.19 as measured (page never reaches network idle for me, so I could not re-measure; Guardian pages are ad-heavy and variable).

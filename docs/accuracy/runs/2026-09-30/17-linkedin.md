@@ -68,4 +68,21 @@ Added by the checker: navigation built from buttons
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Counts: ACCURATE 4, INACCURATE 4, MISLEADING 4, UNSUPPORTED 0, SUBJECTIVE 2.
+
+**Mismatches explained (live: three Chromium variants, curl x3, puppeteer).** No bot challenge or login wall hit either run (both 200, final URL https://www.linkedin.com/). The page is the same for scanner and ground truth apart from small A/B text variation (H1 text differed between runs: "Welcome to your professional community" vs "Explore jobs and grow your network"; curl returns the former every time; count is 1 in both). Visible words: live innerText is 415-441 words in all three variants, so ground 418 is right and scanner 753/759 is the A-09 overcount (hidden text), likewise raw 729 vs JS-off 418 (A-10). Images: the DOM has 8 `<img>`, only 2 have `src` (the other 6 use `data-delayed-url`, lazy), so the scanner's "2 images" is a subset (A-11); the "1 missing alt" is `ponf.linkedin.com/pixel/tracking.png` with `alt=""`, a 1x1 tracking pixel injected by script; ground 6 = 1 no attribute + 5 `alt=""` over all 8. Links 160 vs 158 fine. hreflang: scanner stores 50, page has 77 (cap in `lib/crawler.ts`, R3-05). robots.txt is a 120 KB file with ~60 named groups; the `*` group is `Disallow: /`, so the "blocks all" flag is technically true for unnamed crawlers but not for Googlebot/Bingbot/Applebot/OAI-SearchBot/Claude-SearchBot (R3-03). Referrer-Policy: absent on GET (curl -D, puppeteer main response), though a HEAD request returns it; scanner and ground agree with GET.
+
+1. INACCURATE: "disallows every crawler from the entire site" is false: named crawlers (Googlebot, Bingbot, Applebot, OAI-SearchBot, Claude-SearchBot, ...) have their own groups with partial Disallow and `Allow: /`; only unnamed and listed AI agents are fully disallowed (R3-03). The scan's own `robotsAllows` data contradicts the sentence.
+2. ACCURATE: no JSON-LD (rendered, raw, ground); critical is inflated for a login page (A-13).
+3. MISLEADING: 999 is an anti-bot code (the finding says so) yet it is raised as a critical and scored as "2 broken links" (-6) (R3-06); `/jobs/search` returned 200 to a browser UA in my check.
+4. MISLEADING: the 1 flagged image is a tracking pixel with `alt=""` (valid), the "two images" count ignores 6 lazy images (A-08, A-11); it is not an accessibility gap.
+5. MISLEADING: true on a GET, but listed as critical while the same item is a "low" fix (11); severity inflation (A-13).
+6. INACCURATE: the 37 "buttons" are footer language pickers; navigation links are anchors and the raw HTML already holds 158 links, so nothing is "invisible to crawlers" (R3-04).
+7. INACCURATE: "no search engine or AI crawler can index the logged-out pages" is false for the named search crawlers (R3-03); "a business decision, not a bug" is reasonable.
+8. ACCURATE: no JSON-LD; Organization/WebSite suggestion reasonable.
+9. SUBJECTIVE: reasonable advice (verify in a browser; 999 is anti-bot), but it contradicts the critical and the penalty for the same links.
+10. INACCURATE: the image is not "missing an alt attribute"; it has `alt=""` and is a tracking pixel (A-08).
+11. ACCURATE: Referrer-Policy not served on GET responses; strong other headers.
+12. SUBJECTIVE: reasonable, self-qualified; sitemap/llms.txt both 404 as stated.
+13. ACCURATE: matches the robots.txt groups (GPTBot, ClaudeBot, ChatGPT-User, Claude-User, PerplexityBot, Perplexity-User fully disallowed; OAI-SearchBot, Claude-SearchBot, Googlebot, Bingbot, Applebot partially allowed; CCBot/Bytespider via `*`); this finding contradicts 1 and 7.
+14. MISLEADING: 50 is the scanner's storage cap, the page declares 77 alternates (R3-05); the maintenance advice is reasonable.

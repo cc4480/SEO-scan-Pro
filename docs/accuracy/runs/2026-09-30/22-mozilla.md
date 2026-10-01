@@ -65,4 +65,19 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R4. Counts: ACCURATE 4, INACCURATE 2, MISLEADING 2, UNSUPPORTED 0, SUBJECTIVE 2.
+
+Main defect: all 17 "missing alt" images carry alt="" (ground: no alt attribute 0, empty alt 17; scanner image list shows alt "" for every one, e.g. product logos, decorative CMS photos). That is valid decorative markup, yet critical issue 2 and fix 4 say "no alt attribute" and rate it high (A-08, A-13). Everything else factual checks out live: no JSON-LD, twitter:card = summary with og:image present, no sitemap (/sitemap.xml 404 even after redirect to /en-US/, no Sitemap directive; robots.txt is 66 bytes), no llms.txt (404).
+
+Measurement mismatches explained: visible words 1512 vs 875 and rendered words 1520 vs 875 = scanner counts markup text including hidden menus/aria-hidden, ground uses innerText (A-09, scanner overcounts). Raw words 1520 vs ground JS-off 1308: same cause (A-09/A-10); raw links agree (87). The "canonical missing" flag on fix 9 is noise (canonical present).
+
+1. ACCURATE: no JSON-LD (scanner, ground and the HTML agree). "Critical" is inflated for a nonprofit homepage (A-13); FAQ rich results are retired so listing FAQ among lost rich results is slightly off.
+2. INACCURATE: 0 images lack the alt attribute; all 17 are alt="" (decorative), A-08.
+3. ACCURATE: premise true, Organization/WebSite recommendation reasonable.
+4. INACCURATE: "17 of 22 images have no alt attribute" is false; the fix text itself says decorative images should use alt="", which is what they already do. "high" priority unjustified.
+5. SUBJECTIVE: reasonable; the products named (Firefox, VPN, Monitor, Relay, MDN Plus, Thunderbird) all appear as logos on the page.
+6. MISLEADING: the H3s quoted are marketing headings, not Q&A pairs ("Open Source AI Is Winning" is not even a question); FAQPage markup must mirror visible questions with answers, so recommending it here would produce non-compliant markup.
+7. MISLEADING: BreadcrumbList "Home > en-US" on the homepage adds nothing (a one-item trail; en-US is the locale of the home itself). Low value, and not a real hierarchy.
+8. ACCURATE: /llms.txt 404; correctly labelled optional.
+9. ACCURATE: no sitemap found anywhere, hedged properly ("confirm whether one exists").
+10. SUBJECTIVE: twitter:card=summary with og:image verified live; changing to summary_large_image is a reasonable, minor suggestion.

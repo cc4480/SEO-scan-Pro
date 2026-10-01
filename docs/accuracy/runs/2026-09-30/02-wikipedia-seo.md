@@ -74,4 +74,13 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Lead review.
+Measurements: only mismatch is **sitemap found** = scanner bug **A-01** (the scanner's robots.txt request got 403 with no User-Agent; real robots.txt has a Sitemap directive).
+Findings:
+1,2,5. INACCURATE/MISLEADING (**A-02**): Googlebot, Bingbot and Applebot got 403, reproduced from here, but these are IP-verified crawlers; a spoofed request being refused does not show the real crawler is blocked. Raised as critical/high.
+3,7. ACCURATE numbers (TTFB 2,387 ms of 3,777 ms); 7 rated "high" though network-bound (63% is below the 70% calibration threshold): SUBJECTIVE.
+4,8. ACCURATE (meta description empty; verified).
+6. ACCURATE (ClaudeBot 403; policy decision).
+9. MISLEADING (**A-08**): "seven images have no alt attribute"; ground truth: 2 lack the attribute, 5 are alt="" (decorative).
+10. ACCURATE (verified: viewport is width=1120).
+11. ACCURATE. 12. UNSUPPORTED (**A-07**): "no concise definition near the top" about text the model was never shown. 13,14. ACCURATE/SUBJECTIVE (valid low-priority suggestions).

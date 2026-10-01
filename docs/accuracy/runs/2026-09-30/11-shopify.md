@@ -65,4 +65,24 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R2. Counts: ACCURATE 1, INACCURATE 2, MISLEADING 5, UNSUPPORTED 1, SUBJECTIVE 1.
+Summary: structure, schema, headers and link counts are measured correctly. The report is hurt by three
+register issues: all 48 "missing alt" images are `alt=""` (valid decorative markup; ground: 0 without the
+attribute) (A-08); the word count 1,073 includes 343 words of `display:none` text (a hidden `<nav>` of 221
+words and the language popover of 108) while a reader sees 767 (A-09; verified with a live DOM walk); and
+"critical" is used for items that are not (A-13). Two claims are false on the live page: Shopify does show
+customer stories, and `Corporation` is already an Organization.
+
+Measurement mismatches explained: visible/rendered/raw words 1073/1082/1077 vs 767/767/721 = scanner counts
+CSS-hidden menu and popover text (A-09, scanner bug; the 30% tolerance hid it in the table). Everything else matches.
+
+1. MISLEADING: all 48 are `alt=""` (decorative, valid), none lack the attribute; counted as "missing" (A-08). Severity "critical" not justified.
+2. MISLEADING: 1,073 words is wrong (767 visible, 343 hidden-menu words counted, A-09); "thin" for a 767-word marketing homepage is also doubtful.
+3. MISLEADING: no FAQ is true, but FAQ/HowTo rich results are no longer shown for ordinary sites (the report's own fix 5 says so) and the "review sections" part ignores the customer stories on the page; not critical.
+4. INACCURATE: "48 images have no alt attribute": 0 lack it, 48 have an empty alt (ground: no attr 0, empty 48). Advice to use alt="" for decorative images is what they already do.
+5. MISLEADING: quotes 1,073 words (really 767); "no FAQ" true. The "60 words" flag is noise (it is the advised answer length).
+6. ACCURATE: live GET shows HSTS and nosniff only; no CSP, X-Frame-Options or Referrer-Policy.
+7. MISLEADING: "lacks WebSite and Organization": the page has Corporation (a schema.org subtype of Organization, with logo, sameAs, contactPoint); only WebSite/SearchAction is genuinely missing.
+8. UNSUPPORTED: "not optimized for voice search" cannot be derived from any measured evidence; generic advice.
+9. SUBJECTIVE: 141 internal links is correct (ground 141); the report admits anchor text was not assessed, so the advice is generic boilerplate, low priority is reasonable.
+10. INACCURATE: "No genuine reviews or testimonials ... visible": the page shows customer stories (Guests on Earth "$4M+ business", Our Place, Mattel; Steve Madden / Ornot / Glossier cards). Ratings/reviews markup is absent, but the advice to "add case studies" is wrong.

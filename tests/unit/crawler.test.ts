@@ -69,7 +69,10 @@ describe('parsePage', () => {
     `;
     const result = parsePage('https://example.com', html, 100);
     expect(result.images.total).toBe(3);
-    expect(result.images.missingAlt).toBe(2);
+    // alt="" is the valid way to mark a decorative image, so only the image with NO alt attribute is a defect (A-08).
+    expect(result.images.missingAlt).toBe(1);
+    expect(result.images.noAltAttribute).toBe(1);
+    expect(result.images.emptyAlt).toBe(1);
     expect(result.images.list.find(i => i.src === '/a.jpg')?.hasAlt).toBe(true);
     expect(result.images.list.find(i => i.src === '/c.jpg')?.hasAlt).toBe(false);
   });

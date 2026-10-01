@@ -70,4 +70,37 @@ Added by the checker: JavaScript-dependent content
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R2. Counts: ACCURATE 5, INACCURATE 8, MISLEADING 1, UNSUPPORTED 1, SUBJECTIVE 1.
+Summary: the RENDERED audit is of the real homepage (1.67 MB DOM, 1,849 words, real title/headings), so
+headings, JSON-LD, headers and word counts are valid. The no-JavaScript comparison is NOT: the scanner's
+plain fetch with its browser User-Agent got Amazon's 2,185-byte bot interstitial (a `<meta http-equiv=refresh>`
+to `/?bm-verify=...`, HTTP 202 with empty body on repeat; rawBytes 2185 in the results), counted 0 words and 0
+links, and the report then built 2 critical issues and a high fix on it. A real no-JS load (ground) has 635 words
+and 120 links. Amazon serves three different responses depending on UA/timing (interstitial, captcha page
+"To discuss automated access to Amazon data...", real 700 KB HTML), so this is A-03 on the raw path. Separately
+the report misreads robots.txt: Amazon explicitly DISALLOWS GPTBot, ClaudeBot, CCBot, Bytespider, PerplexityBot,
+Perplexity-User, Claude-SearchBot, Claude-User, ChatGPT-User, so "add explicit allow rules" is the opposite of
+Amazon's policy.
+
+Measurement mismatches explained: H2 12 vs 22 and images 75 vs 106: different page variants/lazy modules
+(the two runs captured different carousels; Amazon changes per request), not a parser fault. raw words/links
+0 vs 635/120: scanner got the interstitial (scanner/pipeline defect, A-03/A-10). robots "blocks all" false vs
+true: ground-truth bug (A-12): the `*` group only disallows specific paths; `Disallow: /` belongs to ~100 bot-specific groups. Bot 200 vs 202: Amazon's challenge status; the scanner also
+treats a 200 interstitial as "received the page" (Googlebot UA gets the 2,185-byte interstitial with 200).
+
+1. INACCURATE: "0 words without JavaScript" is the interstitial, not the site (real no-JS load: 635 words).
+2. ACCURATE: no JSON-LD (ground 0). Critical is inflated (A-13).
+3. INACCURATE: rawWords=0/rawLinks=0 are from the challenge page; the claim "an empty page" is false (see 1).
+4. ACCURATE: no H1 (ground 0).
+5. INACCURATE: the two "404s" carry `&amp;` in the query (undecoded), the sign-in URL returns 302 when properly decoded (checked live: decoded 302, with `&amp;` 404); the register URL answered 503 (bot wall), and `/gp/yourstore` answered 200 to me (503 to the scanner = bot defence). None is a verified broken link.
+6. ACCURATE: llms.txt 404. Critical is inflated (A-13).
+7. INACCURATE: robots.txt does not "fail to allow" these crawlers, it explicitly `Disallow: /` for GPTBot, ClaudeBot, CCBot, Bytespider, PerplexityBot, Perplexity-User, Claude-SearchBot, Claude-User, ChatGPT-User; Googlebot/Bingbot/Applebot have no group of their own (allowed via `*`, not "explicitly allowed"). `robotsAllows:false` was misread.
+8. INACCURATE: built on the interstitial (0 words / 0 links); real raw HTML is a full page.
+9. ACCURATE: no H1 on the rendered page; the example H1 text is a suggestion.
+10. INACCURATE: see 5; the probe did not decode `&amp;` and treated bot-wall statuses (404 from mangled URL, 503) as broken.
+11. UNSUPPORTED: fact (404) is true, but "helps AI crawlers understand which content is available for training and retrieval" is not evidenced by anything the tool measured; the same site disallows those crawlers.
+12. INACCURATE: advises to "explicitly allow" crawlers that robots.txt explicitly disallows; a policy decision, never a defect.
+13. MISLEADING: the "5 missing" are `alt=""` decorative/tracking images (nav sprite, `fls-na` beacon, promo fallbacks), ground says 2 empty, 0 without the attribute (A-08); counts also from a different 75-image variant.
+14. INACCURATE: og:description is present (identical to the meta description, ground and raw HTML agree); only og:title, og:type and twitter:card are absent.
+15. ACCURATE: Referrer-Policy absent (ground false).
+16. SUBJECTIVE: FAQ absence is true (sections.faq false) but an FAQ on Amazon's homepage is a weak recommendation; low priority is reasonable.

@@ -63,4 +63,23 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R1 (2026-09-30). Counts: ACCURATE 3, INACCURATE 0, MISLEADING 3, UNSUPPORTED 0, SUBJECTIVE 3.
+
+Summary: core facts are right (no JSON-LD: 0 `ld+json` in the raw HTML; llms.txt 404 HTML; all 5 security headers and all crawlers fine). Problems: a wrong "single-language" premise, a mis-explained link delta, and social-card advice that does not fit MDN's square logo.
+
+Measurement notes:
+- Raw links 169 (scanner, regex over the HTML source) vs 158 (ground JS-off DOM): I reproduced this. The 11 extra anchors are the language-switcher links (`/de/ /es/ /fr/ /ja/ /ko/ /pt-BR/ /ru/ /zh-CN/ /zh-TW/`) plus one GitHub discussion link and one duplicate `/en-US/`, which sit inside Lit web-component `<template>` markup and never become DOM anchors. So the regex over-counts and the "raw has more links than a browser" signal is not a real crawler difference (A-10). Raw words 901 vs 834/844 is the usual markup-vs-visible text gap (A-09).
+- Ground `og` values are empty while the page has `<meta name="og:title|description|image">`: MDN uses `name=` rather than `property=`; ground reads only `property`. Ground-tool defect (scanner is right to read them). The page has no `og:type` at all (scanner correct).
+- hreflang false is correct for the homepage HTML (no `hreflang` string in the source).
+
+1. ACCURATE: no JSON-LD anywhere in the page (verified). Critical is inflated for a docs hub (A-13).
+2. ACCURATE: /llms.txt returns 404 with HTML (verified). Real but "critical" is inflated: llms.txt is an unproven convention (A-13).
+3. MISLEADING: no FAQ is true, but "pricing block" is irrelevant for MDN (free docs hub), and rated critical it overstates a nice-to-have. Facts partly right, framing wrong.
+4. SUBJECTIVE: JSON-LD advice is reasonable; some content is odd (a BreadcrumbList for the root, a logo "pointing at the social image", which is a 1024x1024 MDN mark). "Search engines and AI must infer identity from prose alone" overstates.
+5. SUBJECTIVE: the fact is correct; "one of the most-cited technical documentation sources" is an unsupported assertion; value of llms.txt is debatable.
+6. SUBJECTIVE: FAQ block on a docs hub homepage is a judgement call; 872 words is the over-count (about 840 visible), fine for the argument.
+7. MISLEADING: og:type missing and twitter:card=summary are true, but the shared image is 1024x1024 (`og:image:width/height` in the page), exactly what the `summary` card is for; switching to `summary_large_image` and a 1200x630 image would crop or distort it. Also notes it should be `og:type=article` on doc pages, which is off-scope.
+8. MISLEADING: the 11 links are the locale picker and one GitHub link in web-component templates, not "conditionally hidden navigation or tracking links"; there is no real raw-vs-rendered difference, and "remove them from server output" would delete the language picker.
+9. ACCURATE: all 5 headers present (ground agrees), crawlers 200, robots OK (`Disallow: /api/ /*/files/ /media` only).
+
+Executive summary error (not a numbered finding): "no hreflang is declared (acceptable for a single-language page)". MDN is multilingual (9-locale switcher in the homepage markup; `/de/` returns 200). The checker also removed "Add hreflang only if MDN ships localized variants" with the reason "no alternate-language versions were found", which is untrue for MDN: a correct suggestion was suppressed.

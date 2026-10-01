@@ -76,4 +76,20 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R1 (2026-09-30). Counts: ACCURATE 2, INACCURATE 1, MISLEADING 3, UNSUPPORTED 0, SUBJECTIVE 3.
+
+Summary: mostly true facts with several framing errors. Verified live (curl + puppeteer): no FAQ or "how it works" text anywhere in the raw HTML or the scrolled DOM; JSON-LD is in the raw HTML (Organization, SoftwareApplication+Offer price 0, Service...); the 2 "missing alt" images are the hero background fallbacks `fallback-dark-glow-*.webp`, both `alt=""` (decorative); 14 of the 18 "images" are light/dark and mobile/desktop duplicates of 4 pictures.
+
+Measurement mismatches explained:
+- Visible words 521 vs 134, rendered 525 vs 134, raw 525 vs 182: not a scanner count error per se but two definitions. The scanner counts text in the serialised HTML (my curl of the raw page gives 550 words including the mega menu, theme-duplicated markup and off-screen blocks). Ground `innerText` is 134 because below-fold sections use `content-visibility`/lazy rendering (15 of 17 `<h2>` have empty innerText until scrolled); after scrolling the page I measured 332 words. So the page a visitor reads has ~330 words, not 521: scanner overcounts (A-09), ground undercounts without scrolling (new ground-tool defect, see R1.md). Ground noJs reported status 304, so its raw figure 182 came from a conditional/cached response and is unreliable (ground-tool bug). Raw=rendered parity (525 each) is confirmed by my raw-HTML read.
+- Images 18 vs 19 DOM: one `<img>` has no src (ground counts it); empty alt 2 vs 3 is the same image.
+
+1. MISLEADING: the 2 images have `alt=""` (valid, decorative background glows), not missing alt; "of 18" also counts 14 theme/viewport duplicates of 4 pictures. Critical severity is wrong for decorative backgrounds (A-08, A-13).
+2. SUBJECTIVE: facts are true (no FAQ, no how-it-works, verified), but critical for a product marketing homepage is inflated; the "no directly extractable Q&A" conclusion is reasonable but not critical (A-13).
+3. INACCURATE: "Two images carry no alt attribute" is false (both are `alt=""`); the remediation itself concedes decorative images should have empty alt, contradicting the title.
+4. SUBJECTIVE: FAQ does not exist (true); "high" priority is generous; text about FAQ rich results no longer showing in Google is correct. "its 521 words" overstates (about 330 visible).
+5. SUBJECTIVE: true that there is no how-it-works block; value is an opinion; the suggested deploy steps are an example, not a claim.
+6. MISLEADING: states `visibleSections.pricing is false`, but the payload says pricing: true (set by the "Pricing" nav link, A-05). The checker removed the model's critical-issue version of this claim with the reason "the page already has a pricing section", which is false (homepage has no prices; pricesVisibleOnPage is empty), while this fix survived. The underlying observation (SoftwareApplication Offer price 0 with no visible price) is true.
+7. MISLEADING: the page does have "Features" lists under each product block (verified in DOM text: "Features / Durable Orchestration / Sandboxed Environments ..."), and the "headings" cited (Agent Stack, Core Platform, Security, Tools, Frameworks, SDKs) are footer navigation groups, not product-area headings. "No feature-level prose" is arguable, "features section absent" is not true.
+8. ACCURATE: raw HTML contains the same content, links and JSON-LD (verified with curl, 626 KB, 550 words, 8 schema types); "commonly reported behaviour, not tested" is properly hedged.
+9. ACCURATE: all 13 crawlers get 200 and robots.txt has no AI-crawler Disallow (ground agrees). The checker-style flags "says GPTBot is blocked" are noise from the word "blocked" in the hedge. Caveat: robots.txt carries `Content-Signal: search=yes, ai-input=yes, ai-train=no`, which the report ignores while calling the policy "optimal ... for training crawlers" (see R1.md).

@@ -71,4 +71,27 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R4. Counts: ACCURATE 7, INACCURATE 3, MISLEADING 3, UNSUPPORTED 0, SUBJECTIVE 3.
+
+FAQ: there is no FAQ section. The only occurrence of "faq" in the raw HTML is the footer link "help, faq, abuse, legal" pointing to /about/help/ (verified with curl and in the live DOM; body text never contains "frequently asked"). So "visible FAQ section" (critical 6) is A-05. The checker's own removal ("page already has a faq section") rests on the same false signal.
+
+Redirects: live curl shows www.craigslist.org -> 302 geo.craigslist.org -> 302 /area/laredo -> 200, i.e. TWO redirects (the scan's own event says "2 redirect hop(s)"); the AI counted the 3 URLs in redirectChain as three hops. These are geo-IP 302s by design: a visitor from another city lands on another area page, so the advice "redirect directly to /area/laredo in a single 301" is not possible or sensible.
+
+Measurement mismatches (the site serves different DOMs): scanner H1 1 / links 451 / words 677 equal the static server HTML (curl: 454 anchors, h1 x2 incl. one title-like H1, h2 "laredo, TX", ~703 words). Ground's rendered load got 0 H1, 0 H2, 258 anchors, 465 words, while its JS-off load got 451 anchors and 2 H1s. My own puppeteer loads (JavaScript on, both scanner UA and Chrome UA) now return a third variant: 152 anchors, 64 words, no H1; JS off returns the static page (454 anchors, 703 words). So craigslist rewrites its DOM client-side and the result varies by run (A/B or progressive client rendering); neither scanner nor ground is wrong, the page is unstable. Consequently H1 (A-11), links (A-11) and words (A-09) mismatches are "site served different content", not parser bugs; the plain-HTML parser handled the static HTML correctly (451 vs 454 anchors; the 2nd H1 is presumably visually hidden and skipped).
+
+1. INACCURATE: two redirects, not three hops (3 URLs in the chain, 2 hops); 302 geo-redirect by design.
+2. ACCURATE: `<html>` has no lang attribute (raw HTML verified; ground also empty).
+3. ACCURATE: no X-Content-Type-Options header (verified with curl). "Critical" is inflated (A-13).
+4. ACCURATE: no Referrer-Policy header (verified). Severity inflated (A-13).
+5. MISLEADING: 0 <img> is true (curl: 0) but a text classifieds hub does not need images; calling it critical for "image search visibility" is not a defect. The checker removed the alt-text fix for this very reason but left the critical.
+6. INACCURATE: no FAQ section exists (only a footer link to /about/help/), A-05. The "no FAQPage" half is true but pointless.
+7. SUBJECTIVE: the description is a generic template (verified, no "Laredo") so the observation is true; its CTR impact is a judgement. Reasonable.
+8. MISLEADING: 677 is the scanner's own count of a page that is mostly navigation links (ground 465, raw 703); "thin" for a link hub is a poor lens and the number is unstable.
+9. ACCURATE: CLS 1.263 is what the scan measured (a 1272 ms LCP also recorded). Could not re-verify since the page now renders differently for me, so treat as a lab figure that varies by variant.
+10. INACCURATE: premise (three hops, single 301 to the Laredo page) is wrong; geo-routing on 302 is the design and "update internal links" is meaningless. "high" priority unjustified.
+11. ACCURATE: header absent; fix is standard.
+12. ACCURATE: header absent; fix is standard.
+13. SUBJECTIVE: reasonable local-relevance tip; the example copy is plausible.
+14. MISLEADING: "add 300-500 words of text" to a classifieds index is poor advice and rests on an unstable word count (see 8).
+15. ACCURATE: CLS figure as measured; advice generic (the page has no images, so "width/height on images" does not apply).
+16. SUBJECTIVE: TTFB 803 ms of 1201 ms (67%) matches the data; "reduce TTFB / configure CDN" is generic but reasonable.

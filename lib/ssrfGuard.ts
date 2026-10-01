@@ -193,6 +193,8 @@ export interface SafeResponse {
   headers: http.IncomingHttpHeaders;
   url: string;
   text: string;
+  /** True when the connection ended before the whole body arrived (not when OUR size cap cut it). The text is then a prefix, not the page. */
+  truncated?: boolean;
 }
 
 export interface SafeFetchOptions {
@@ -206,12 +208,25 @@ export interface SafeFetchOptions {
   maxBytes?: number;
 }
 
+/** Polite, identifying request identity used when a caller does not pass its own User-Agent. */
+export function defaultUserAgent(): string {
+  const site = (process.env.APP_URL || '').trim() || 'https://seoscanpro.com';
+  return `Mozilla/5.0 (compatible; SEOScanPro/1.1; +${site})`;
+}
+
+function hasHeader(h: Record<string, string> | undefined, name: string): boolean {
+  return !!h && Object.keys(h).some((k) => k.toLowerCase() === name);
+}
+
 /**
  * fetch-alike that refuses private destinations at connect time and
  * re-validates every redirect hop. Throws SsrfBlockedError when blocked.
  */
 export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Promise<SafeResponse> {
-  const { method = 'GET', headers = {}, body, timeoutMs = 8000, maxRedirects = 3, maxBytes = 2 * 1024 * 1024 } = opts;
+  const { method = 'GET', body, timeoutMs = 8000, maxRedirects = 3, maxBytes = 2 * 1024 * 1024 } = opts;
+  // Many sites (Wikipedia, Reddit, The Guardian) answer a request with no User-Agent with 403/406,
+  // which made robots.txt look unpublished. Identify ourselves politely unless the caller chose an identity.
+  const headers = hasHeader(opts.headers, 'user-agent') ? (opts.headers as Record<string, string>) : { ...opts.headers, 'User-Agent': defaultUserAgent() };
   let current = (await assertPublicUrl(rawUrl)).toString();
 
   for (let hop = 0; ; hop++) {
@@ -246,9 +261,11 @@ function requestOnce(
       (res) => {
         const chunks: Buffer[] = [];
         let size = 0;
+        let capped = false;
         res.on('data', (c: Buffer) => {
           size += c.length;
           if (size > o.maxBytes) {
+            capped = true;
             res.destroy();
             return;
           }
@@ -261,7 +278,7 @@ function requestOnce(
           if (done) return;
           done = true;
           const status = res.statusCode ?? 0;
-          resolve({ status, ok: status >= 200 && status < 300, headers: res.headers, url, text: Buffer.concat(chunks).toString('utf8') });
+          resolve({ status, ok: status >= 200 && status < 300, headers: res.headers, url, text: Buffer.concat(chunks).toString('utf8'), truncated: !capped && !res.complete });
         };
       },
     );

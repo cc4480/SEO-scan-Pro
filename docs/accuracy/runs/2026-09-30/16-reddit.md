@@ -85,4 +85,29 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Counts: ACCURATE 9, INACCURATE 3, MISLEADING 7, UNSUPPORTED 0, SUBJECTIVE 1.
+
+**Mismatches explained (checked live: three Chromium variants, curl).** The scanner is right, the ground-truth run is wrong. Both runs were served the same page (both pass Reddit's JS challenge: the scanner's `redirectChain` and the ground `finalUrl` both carry `?js_challenge=1&jsc_token=...`; no variant difference, no block). Re-measuring with the scanner's UA/viewport, the ground tool's UA/viewport and a plain Chrome UA gives 125 / 141 / 142 images, 2,080 / 2,795 / 2,390 innerText words, 189 / 201 / 201 links, H1 0, H2 1. A real visitor therefore gets ~140 images, ~2,000-2,800 words, ~200 links. The ground run's 26 images / 474 words / 95 links is a snapshot taken before the feed hydrated (its `bodySample` shows only the first posts) = ground tool defect (R3-02). Scanner 125 vs 141 images and 199 vs 201 links is the 800px default viewport (R3-01); 2,296 words is within normal overcount (A-09). Alt: 59 is 1 no-attribute + 58 `alt=""` (A-08). Raw 1 word / 0 links (scanner) vs 11 / 18 (ground) is the same JS-challenge page seen twice: curl returns 8,397 bytes, exactly the scanner's `rawBytes`, `<title>Reddit</title>` and a script-submitted form (R3-07). robots.txt: scanner got a 403 at scan time (A-01); the file is `User-agent: * / Disallow: /` (curl, Chrome UA and `node` UA all 200 now), so ground "blocks all = true" is right, scanner "false" is wrong. Sitemap: `/sitemap.xml` is a 200 HTML page (challenge), robots has no Sitemap line, so "no sitemap" is correct and ground "found" is a ground-tool false positive (A-12).
+
+Biggest defect: robots.txt disallows the whole site and the report says the opposite ("robots.txt allows them", "does not disallow them", "welcomes crawlers"). The missing critical finding is "robots.txt disallows every crawler".
+
+1. ACCURATE: 1 word without JS is measured (curl: 8,397-byte challenge page); the cause is the challenge, see 9.
+2. MISLEADING: the 403s are for spoofed UAs from a non-Google/Bing/OpenAI IP (A-02); Googlebot/Bingbot are IP-verified, and robots.txt itself disallows everyone, which is not mentioned.
+3. MISLEADING: "single highest-severity finding" rests on spoofed-UA 403s; the real blocker is `Disallow: /` in robots.txt (unread, A-01). "search indexing at risk" is unsupported by these probes.
+4. MISLEADING: statuses are right, but the "OpenAI's search crawler can reach it but training/user agents cannot" posture is not what robots.txt says (Disallow: / for all, OAI-SearchBot included); inference unsupported. (The sheet's flag on OAI-SearchBot is a false alarm.)
+5. ACCURATE: rawBytes 8,397 / rawWords 1 / rawLinks 0 / 2,303 and 199 verified; "close to nil for non-JS crawlers" is hedged and true of the challenge page.
+6. ACCURATE: no JSON-LD in rendered or raw DOM; "critical" is inflated (A-13).
+7. ACCURATE: zero `<h1>` confirmed in all three variants; word count is the A-09 overcount (innerText ~2,000+).
+8. MISLEADING: only 1 of 125 images lacks the alt attribute, 58 have `alt=""` (many community icons next to text, valid decorative); "47%" and "accessibility gap" overstated (A-08).
+9. ACCURATE: the first navigation lands on a js_challenge URL; curl shows the challenge page to non-JS clients. This is the real cause of findings 1/5/12.
+10. INACCURATE: "robots.txt allows them" is false (Disallow: / for `*`); it came from an unreadable robots.txt (A-01). Googlebot/Bingbot 403 are spoofed-UA probes (A-02). Remediation (let crawlers through) cannot be derived from this evidence.
+11. INACCURATE: "even though robots.txt does not disallow them" is false, and "answer-engine citation is not affected" is unsupported given the site-wide Disallow. The 403/429 statuses themselves are accurate.
+12. MISLEADING: the raw HTML is a bot-challenge page, not an unrendered app; "server-render" is not supported (R3-07, A-03).
+13. ACCURATE: no H1, H2 "Popular Communities" (1 H2) confirmed; advice reasonable.
+14. SUBJECTIVE: reasonable advice, no JSON-LD is true; marking it high priority for a feed homepage is debatable.
+15. INACCURATE: "59 of 125 have no alt attribute" is wrong, 1 lacks the attribute; the advice to triage decorative vs informative in the same text is right (A-08).
+16. MISLEADING: empty robots meta means indexable by default, so "no positive indexability signal" is wrong framing and "index, follow" is a no-op; the real indexability signal (robots.txt Disallow: /) is missed.
+17. ACCURATE: Referrer-Policy absent on GET (curl -D); other four headers present.
+18. ACCURATE: og:title "reddit", og:description empty, og:image the 192x192 favicon, twitter:card summary (ground and scan event agree).
+19. MISLEADING: 924.1 KB is the serialized DOM (`page.content()`), not "transferred" bytes (R3-08); LCP 1,144 ms / CLS 0.002 are as measured at 800px.
+20. ACCURATE: `/llms.txt` is not a real file (returns the challenge HTML with 200); low-value advice, labelled low.

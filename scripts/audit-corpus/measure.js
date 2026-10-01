@@ -43,7 +43,11 @@
     jsonLdTypes: Array.from(types),
     jsonLdEntities: entities,
     hreflang: Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map((l) => l.getAttribute('hreflang') || ''),
-    og: { title: meta('meta[property="og:title"]'), description: meta('meta[property="og:description"]'), image: meta('meta[property="og:image"]') },
+    og: {
+      title: meta('meta[property="og:title"], meta[name="og:title"]'),
+      description: meta('meta[property="og:description"], meta[name="og:description"]'),
+      image: meta('meta[property="og:image"], meta[name="og:image"]')
+    },
     bodyText: ((document.body && document.body.innerText) || '').replace(/\s+/g, ' ').trim(),
     headingsText: Array.from(document.querySelectorAll('h1,h2,h3')).map(clean).slice(0, 80),
     navLabels: Array.from(document.querySelectorAll('nav a, header a, footer a, nav button, header button')).map(clean).filter((t) => t && t.length < 60).slice(0, 120),

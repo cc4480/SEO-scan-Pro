@@ -73,4 +73,8 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Lead review. **Measurements: all match ground truth** (including the lettered-span word count fixed earlier).
+Findings: 18 reviewed. Factually ACCURATE: 1-8 and 9-18 (no meta description, no canonical, no headings, no JSON-LD, 0 internal links, no OG tags, 133 words, no sitemap, headers absent, TTFB caveated).
+- SUBJECTIVE / A-13: severity. 8 "critical" issues on a demo page, several minor (no OG tags, no sitemap).
+- 15: "at least 600-800 words" is a recommendation target, not a claim (the automatic flag is a false alarm).
+Counts: ACCURATE 17, SUBJECTIVE 1.

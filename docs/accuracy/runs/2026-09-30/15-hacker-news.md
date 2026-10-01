@@ -71,4 +71,31 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R2. Counts: ACCURATE 10, INACCURATE 1, MISLEADING 2, UNSUPPORTED 0, SUBJECTIVE 2.
+Summary: most facts are right for a deliberately minimal site. Two real problems: (a) the 419 responses are a
+real HN behaviour for requests that claim to be Googlebot, Bingbot, Applebot, GPTBot, ClaudeBot, OAI-SearchBot,
+Claude-SearchBot and ChatGPT-User from a non-crawler IP (verified: those UAs get 419 "Sorry", a normal Chrome UA or
+curl gets 200); this is a spoofed-UA refusal (A-02), not proof that the real crawlers are shut out, yet the report
+says they "cannot retrieve or index the page" and the scanner's own log says "all 13 crawlers received the page";
+(b) the internal/external link split is wrong (1 internal / 224 external; real 192 internal): relative hrefs such
+as `item?id=...` and `user?id=...` (no leading slash) were classified external.
+
+Measurement mismatches explained: words 681/683 vs 681: none (HN front page changes between fetches, 681 vs 663
+on a later run). Raw links 226 vs 225: live content change between runs. The sheet shows 225 total links in both,
+the internal split is only visible in the findings (scanner internal 1 vs ground internalAnchors 192).
+
+1. MISLEADING: 419 is real for those UA strings (curl-verified) but it is a spoofed-UA refusal; real crawlers use verified IPs and Google does index the site. The scanner itself did not count 419 as blocked (REFUSAL set is 401/403/406/429) so the report and the scan log disagree (A-02).
+2. ACCURATE: no JSON-LD (ground 0). Critical is inflated for HN (A-13).
+3. ACCURATE: no H1/H2/H3 (ground 0/0/0). Critical is inflated.
+4. ACCURATE: no meta description, no canonical (ground empty).
+5. ACCURATE: 3 `<img>` without an alt attribute (logo svg and two 1px `s.gif` spacers); true but trivial, "critical" is inflated.
+6. ACCURATE: no Open Graph or Twitter tags (ground empty). Inflated severity.
+7. MISLEADING: same as 1; the advice to alter WAF rules so spoofed Googlebot/GPTBot UAs pass is poor, and "high" is not justified.
+8. SUBJECTIVE: absence of JSON-LD is true; ItemList/WebSite SearchAction on a news aggregator is optional and SearchAction no longer feeds a Google feature; "high" is unreasonable.
+9. ACCURATE: facts correct (681 words, 225 links, no headings); advice is generic and "high" is generous.
+10. ACCURATE: both empty; the suggested canonical host is right.
+11. ACCURATE: facts correct; low value for HN.
+12. ACCURATE: 3 images, none with alt attribute; the text correctly notes it is not a ranking failure.
+13. INACCURATE: "only 1 internal and 224 external" is wrong: ~192 anchors are same-site (`item?id=`, `user?id=`, `hide?id=`, `from?site=` ...) and only ~33 are external story links. Scanner classified slash-less relative hrefs as external; the conclusion "almost entirely outbound" is false.
+14. SUBJECTIVE: llms.txt absent (true), hedged low priority is reasonable.
+15. ACCURATE: HSTS, CSP, X-Frame-Options, nosniff and Referrer-Policy all present (live GET). The two ⚠ flags are noise (sentence says they are present).

@@ -29,6 +29,12 @@ export interface CrawlPageData {
   images: {
     total: number;
     missingAlt: number;
+    /** Images with no alt attribute at all (a real defect). `missingAlt` is the older combined count. */
+    noAltAttribute?: number;
+    /** Images with alt="" (decorative; valid, not a defect). */
+    emptyAlt?: number;
+    /** Images whose real source is in data-src / srcset (lazy loading) because `src` is absent or a data: placeholder. Included in `total`. */
+    lazyNoSrc?: number;
     list: Array<{ src: string; alt: string; hasAlt: boolean }>;
   };
   links: {
@@ -53,6 +59,12 @@ export interface CrawlPageData {
   };
   /** `<link rel="alternate" hreflang>` annotations. */
   hreflang?: Array<{ lang: string; href: string }>;
+  /** True number of hreflang alternates on the page; `hreflang` is a sample capped at 50. */
+  hreflangTotal?: number;
+  /** Bytes transferred over the network for the whole page load (KB, compressed); `pageSizeKb` is only the serialized HTML. */
+  transferKb?: number;
+  /** Requests the page made while loading. */
+  requestCount?: number;
   /** Visible words in the rendered body (scripts/styles stripped). Low counts flag thin content. */
   wordCount?: number;
   /** Lab-measured from the scanning host; not field data. Undefined when the browser did not report them. */
@@ -78,6 +90,8 @@ export interface SecurityHeaders {
   https: boolean;
   hsts: boolean;
   csp: boolean;
+  /** The site sends Content-Security-Policy-Report-Only (a policy that is observed, not enforced). Absent on scans that did not record it. */
+  cspReportOnly?: boolean;
   xFrameOptions: boolean;
   xContentTypeOptions: boolean;
   referrerPolicy: boolean;
@@ -110,10 +124,35 @@ export interface CrawlResult {
    */
   llmsTxtFound: boolean;
   hasSimulatedData: boolean;
+  /** 'challenge' = the audited page was a bot challenge / interstitial, not the site itself. */
+  pageKind?: 'normal' | 'challenge';
+  challengeReason?: string;
   /** True when robots.txt disallows everything (`User-agent: *` + `Disallow: /`). */
   robotsBlocksAll?: boolean;
+  /**
+   * What robots.txt grants each named crawler (GPTBot, Googlebot ...), from the most specific matching group
+   * (a named group overrides "*"): 'allowed' = home page may be fetched, 'partial' = home page off limits but
+   * some paths explicitly allowed, 'disallowed' = nothing. Absent when robots.txt was unreadable or absent.
+   * robotsBlocksAll is true only when "*" disallows "/" AND no named group grants any access.
+   */
+  robotsByCrawler?: Record<string, 'allowed' | 'partial' | 'disallowed'>;
+  /**
+   * False when /robots.txt answered with a refusal or error (401/403/406/418/429/5xx) or timed out:
+   * its rules are UNKNOWN, which is different from "none published" (404/410). Undefined on old scans.
+   */
+  robotsReadable?: boolean;
+  /**
+   * False when the sitemap could not be checked because robots.txt (which may name it) or the sitemap
+   * itself was refused or failed. sitemapFound is then false only because nothing could be seen, not because
+   * the sitemap is missing. True when the answer was a real 200 or a real 404/410.
+   */
+  sitemapChecked?: boolean;
+  /** False when /llms.txt answered with a refusal or error instead of 200 or 404/410. */
+  llmsChecked?: boolean;
   /** Each URL visited from the requested one to the final page (length 1 = no redirect). */
   redirectChain?: string[];
+  /** Number of redirects followed = redirectChain.length - 1 (the chain includes the requested URL; 0 = no redirect). */
+  redirectHops?: number;
   securityHeaders?: SecurityHeaders;
   /** Sample of links on the main page that returned an error status. `linksChecked` is the sample size. */
   brokenLinks?: BrokenLink[];
@@ -138,8 +177,17 @@ export interface BotAccessResult {
   role: BotRole;
   /** HTTP status the site returned to this crawler's published user agent; 0 = the request failed. */
   status: number;
-  /** 401/403/406/429 or a failed request while a normal browser got through. */
+  /**
+   * Strict: refused (401/403/406/429) or no response twice, while a plain browser-style request got
+   * through, and the result is not inconclusive.
+   */
   blocked: boolean;
+  /**
+   * Refused, but not provably a block of the real crawler: either the site refuses every non-browser
+   * client (BotAccess.baselineRefused), or this crawler is verified by IP/reverse DNS (Googlebot,
+   * Bingbot, Applebot) so a spoofed request from our IP is refused on purpose.
+   */
+  inconclusive?: boolean;
   /** What robots.txt says for this crawler on "/"; null when robots.txt could not be read. */
   robotsAllows: boolean | null;
 }
@@ -148,6 +196,10 @@ export interface BotAccess {
   checkedUrl: string;
   /** Status a plain browser-style request got, the baseline each crawler is compared against. */
   baselineStatus: number;
+  /** True when the browser-style baseline request was itself refused (401/403/406/429 or no response): the site refuses non-browser clients in general, so no per-crawler refusal proves anything. */
+  baselineRefused?: boolean;
+  /** True when robots.txt could not be read (refusal/error), so robotsAllows is null on every result. */
+  unreadableRobots?: boolean;
   results: BotAccessResult[];
   /** Crawlers robots.txt welcomes but the site refuses at the network layer (e.g. a CDN bot rule). */
   conflicts: string[];
@@ -159,6 +211,15 @@ export interface RawVsRendered {
   rawBytes: number;
   rawWords: number;
   rawLinks: number;
+  /**
+   * How rawWords / rawLinks were measured: 'browser-no-js' = a real browser load with JavaScript
+   * disabled (CSS applied, like a reader); 'http-fetch' = regex count over the plain response.
+   */
+  rawMeasuredBy?: 'browser-no-js' | 'http-fetch';
+  /** Set when the no-JavaScript page was a bot challenge / blocked page: rawWords and rawLinks then describe the wall, not the site, and must not be compared. */
+  rawChallenge?: string;
+  /** Set when the plain HTTP response was an interstitial, cut off, or far smaller than the rendered page: rawBytes / rawSchemaTypes are then not comparable, and schemaOnlyAfterJs is left empty. */
+  rawFetchUnreliable?: string;
   rawSchemaTypes: string[];
   /** After a real browser ran the page's JavaScript. */
   renderedWords: number;
@@ -197,6 +258,14 @@ export interface ContentSignals {
   prices: string[];
   hasVisibleReviews: boolean;
   multiLanguage: boolean;
+  /** First ~120 words of the main visible text; the only basis for claims about a lead answer/definition/summary. */
+  openingText?: string;
+  /** The page mentions customer stories, case studies or testimonials (distinct from rating/review markup). */
+  customerStories?: boolean;
+  /** Relative language-switcher links (/de/, /pt-br/) when three or more exist: the page has language versions even without hreflang tags. */
+  localeLinks?: string[];
+  /** robots.txt "Content-Signal" preferences (search / ai-input / ai-train); undefined when absent. */
+  contentSignal?: { search?: boolean; aiInput?: boolean; aiTrain?: boolean };
 }
 
 export interface AuditFacts {
@@ -262,7 +331,7 @@ export interface DeepSeekSeoReport {
   scoreMethod?: 'measured' | 'illustrative';
   scoreBreakdown?: ScoreBreakdown;
   /** What the evidence check did to the written report. */
-  qa?: { removed: Array<{ title: string; reason: string }>; added: string[] };
+  qa?: { removed: Array<{ title: string; reason: string }>; added: string[]; /** Criticals the calibration moved to recommendedFixes. */ demoted?: Array<{ title: string; reason: string }> };
 }
 
 export interface WhiteLabelSettings {

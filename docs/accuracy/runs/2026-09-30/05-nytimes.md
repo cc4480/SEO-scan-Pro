@@ -34,4 +34,20 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R1 (2026-09-30). Counts: ACCURATE 1, INACCURATE 8, MISLEADING 4, UNSUPPORTED 0, SUBJECTIVE 0.
+
+Summary: the scan is correctly flagged simulated (HTTP 403 bot wall, confirmed live: curl with a browser UA also gets 403), and the executive summary and finding 1 say so honestly. But 8 of 13 findings state placeholder values as if they were about nytimes.com (14 images / 3 without alt, "Www | Leading Solutions" title, 28 links, 946 ms, 45 KB, Organization/WebSite/LocalBusiness types, a "Frequently Asked Questions" H2). All of it is invented by `generateSimulatedCrawl` in `lib/crawler.ts` (the brand is even derived as "Www" from the host `www.nytimes.com`, links are `https://www.nytimes.com//about`, `twitter.com/www`). The ground-truth page has 0 images, 0 H2, no JSON-LD, 8 words. That is fabrication (A-04), and the 62/68/55/60/82 scores are computed from it. Only the three facts that were really measured are true: llms.txt 404, sitemap found (news sitemap, curl 200), robots.txt readable and not `Disallow: /` for `*`. Ground truth `robotsDisallowAll: true` is a ground-tool false positive (A-12): the `User-agent: *` group is merged with Googlebot and only disallows paths.
+
+1. ACCURATE: honest statement that the crawl failed and the payload is placeholder.
+2. MISLEADING: llms.txt is really absent (404 verified), but listed as "critical" and recommended to a publisher whose robots.txt explicitly prohibits AI use and disallows GPTBot, ClaudeBot, CCBot, Claude-SearchBot, ChatGPT-User and dozens of other AI agents (verified live).
+3. INACCURATE: "3 of 14 images" is placeholder data; real page measured 0 images in the failed load; nothing is known about nytimes.com images.
+4. INACCURATE: title/description are the offline template's "Www | Leading Solutions & Professional Services", not nytimes.com's.
+5. MISLEADING: re-running is the right instinct, but "a host with a clean network path" is wrong; the block is a bot defence (403 to any automated or datacenter client), so a re-run from elsewhere will not help. It also repeats the placeholder numbers.
+6. MISLEADING: same as 2; advice conflicts with the site's published AI policy.
+7. INACCURATE: fabricated image counts (3 of 14).
+8. INACCURATE: asks to rewrite a title that is the simulator's template, not the site's.
+9. INACCURATE: the structured-data types (Organization, WebSite, LocalBusiness) are hard-coded placeholders; nytimes.com is a news publisher, LocalBusiness is certainly not its markup.
+10. INACCURATE: the "Frequently Asked Questions" H2 is a placeholder heading; no FAQ was seen.
+11. INACCURATE: 28 links / 19 internal / 9 external are fabricated.
+12. MISLEADING: "robotsBlocksAll false" is true, but the report says per-crawler access is unknown and suggests confirming that AI crawlers are allowed, while robots.txt (read successfully, 200, 8.5 KB) explicitly blocks them. The real, measured answer was available and omitted.
+13. INACCURATE: 946 ms and 45 KB are placeholders; the speculation that the time is "network-bound" explains a number that was never measured.

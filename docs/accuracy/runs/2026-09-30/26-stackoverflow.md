@@ -29,4 +29,21 @@ Added by the checker: none
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R5. Counts: ACCURATE 0, INACCURATE 5, MISLEADING 0, UNSUPPORTED 5, SUBJECTIVE 0.
+
+Summary: the scan is simulated, and the cause is a bot defence, not an unreachable site. The scanner's Chromium (UA "...SEO-Scan-Pro/1.1") was redirected / -> /questions and got a Cloudflare "Just a moment..." 403 (curl confirms 403 "Just a moment..." on /questions for that UA). A normal Chrome UA in puppeteer passes the challenge and renders the real page (title "Newest Questions - Stack Overflow", 1549 words, 155 internal links, 19 images, JSON-LD WebSite/Organization/ContactPoint, no FAQ section). So "simulated" is a scanner limitation and the page a real visitor sees is fully readable. Every page-derived statement in the report comes from the placeholder generator (brand "Stackoverflow", title "Stackoverflow | Leading Solutions & Professional Services", 14 images/3 without alt, 28 links/19 internal, H2 "Frequently Asked Questions", JSON-LD Organization/WebSite/LocalBusiness, 58 KB, 529 ms): none of it exists on stackoverflow.com. The finding list never says the data is simulated (only the executive summary does), and the agent hand-off prompt carries the same fabricated tasks.
+
+Fabricated placeholder claims presented as findings: image counts (1, 4, 8), "3 of 14 images" (also the alt-text title), FAQ section with H2 "Frequently Asked Questions" (7, 10 and the aeoAssessment text), "19 internal links" (8), "page size 58KB, headings limited" (9), structured data types Organization/WebSite/LocalBusiness (7, aeo richSnippetEligibility), load time 529 ms, scores 68/72/65/70/85 (identical to Tesla's). Also in the executive summary and agentReadyPrompt (tasks 1, 4, 5).
+
+Measurement table: "page reached: simulated vs status 403" is correct (the first response IS 403). Ground truth rendered the real page after the JS challenge; the sheet only compares the status.
+
+1. INACCURATE: "3 images missing alt" is the placeholder image list; the real page has 19 images, 0 without an alt attribute, 2 with empty alt.
+2. UNSUPPORTED: scan saw sitemap.xml -> 403 and read it as "not found"; live (browser UA and in-browser fetch) it is 404, so the claim is true today but was not established by the evidence (A-01).
+3. UNSUPPORTED: llms.txt -> 403 at scan time; live 404 (true today, not established). Also rated critical for an optional file (A-13).
+4. INACCURATE: repeats the fabricated 3 of 14 images.
+5. UNSUPPORTED: sitemap advice based on a 403; see 2. robots.txt is not "unreadable-so-absent" either: from this machine it answers HTTP 418 with a disallow-all body ("User-agent: * / Content-signal: search=no, ai-train=no / Disallow: /"), which the scanner turned into "no crawl rules published" (A-01).
+6. UNSUPPORTED: llms.txt advice; see 3 (SUBJECTIVE advice on top).
+7. INACCURATE: the page has no FAQ section and no "Frequently Asked Questions" H2; its structured data is WebSite/Organization/ContactPoint, not LocalBusiness. The checker flag ("says structured data is missing but the page has 3 types") is correct and the 3 types are themselves fabricated.
+8. INACCURATE: the 19 internal links are placeholder ("https://stackoverflow.com//about"); the real page has 155 internal anchors. "The audit did not assess anchor text" admits there is nothing real behind it.
+9. INACCURATE: "page size 58KB, headings limited" is the placeholder; the real page is 1549 words with many headings.
+10. UNSUPPORTED: voice-search / Q&A advice written without any page text; generic boilerplate.

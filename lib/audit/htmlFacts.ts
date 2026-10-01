@@ -15,6 +15,90 @@ export function decode(value: string): string {
   });
 }
 
+// ---- Tag / attribute tokenizer -------------------------------------------------------------------
+// Attribute values may contain the other quote character ("world's") and even '>' ("a > b"), so a
+// character class like ["'][^"']*["'] or a [^>]* tag body cuts values short. These helpers honour
+// the opening quote, accept unquoted values and ignore attribute order.
+
+export type Attrs = Record<string, string>;
+
+/** Parses the inside of a start tag (everything after the tag name). Names are lower-cased, values decoded, the first duplicate wins. */
+export function parseAttrs(src: string): Attrs {
+  const out: Attrs = {};
+  const re = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    const name = m[1].toLowerCase();
+    if (name in out) continue;
+    const value = m[2] ?? m[3] ?? m[4] ?? '';
+    out[name] = decode(value);
+  }
+  return out;
+}
+
+export interface TagMatch {
+  attrs: Attrs;
+  /** Index of the '<' and the index just after the '>' of the start tag. */
+  start: number;
+  end: number;
+}
+
+// A start tag body: runs of quoted strings (which may contain '>') or any non-quote, non-'>' character.
+const TAG_BODY = '((?:"[^"]*"|\'[^\']*\'|[^>"\'])*)';
+
+/** Every start tag with the given name, in document order, with its attributes parsed. */
+export function findTags(html: string, name: string): TagMatch[] {
+  const re = new RegExp(`<${name}(?=[\\s/>])${TAG_BODY}>`, 'gi');
+  const out: TagMatch[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) out.push({ attrs: parseAttrs(m[1]), start: m.index, end: m.index + m[0].length });
+  return out;
+}
+
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+
+/** True when an element's own attributes make a browser hide it from a reader. */
+function isHiddenByAttrs(a: Attrs): boolean {
+  if ('hidden' in a) return true;
+  const style = (a.style || '').toLowerCase().replace(/\s+/g, '');
+  return /(^|;)display:none(;|!important|$)/.test(style) || /(^|;)visibility:hidden(;|!important|$)/.test(style);
+}
+
+/**
+ * Removes elements a reader cannot see, judged from their own attributes only: the `hidden`
+ * attribute and inline display:none / visibility:hidden. Best effort: it cannot know what a
+ * stylesheet or script hides. aria-hidden is NOT treated as hidden: it only hides content from
+ * screen readers, and a browser's innerText still includes it.
+ */
+export function stripHidden(html: string): string {
+  const re = new RegExp(`<(/?)([a-zA-Z][a-zA-Z0-9-]*)${TAG_BODY}>`, 'g');
+  let out = '';
+  let cursor = 0;
+  let skip: { name: string; depth: number } | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const closing = m[1] === '/';
+    const name = m[2].toLowerCase();
+    if (skip) {
+      if (name === skip.name && !VOID_TAGS.has(name)) {
+        if (!closing && !m[3].trimEnd().endsWith('/')) skip.depth++;
+        else if (closing && --skip.depth === 0) {
+          cursor = m.index + m[0].length;
+          skip = null;
+        }
+      }
+      continue;
+    }
+    if (closing || VOID_TAGS.has(name) || m[3].trimEnd().endsWith('/')) continue;
+    if (isHiddenByAttrs(parseAttrs(m[3]))) {
+      out += html.slice(cursor, m.index);
+      skip = { name, depth: 1 };
+    }
+  }
+  // An unclosed hidden element hides the rest of the document, as a browser would.
+  return skip ? out : out + html.slice(cursor);
+}
+
 /**
  * Text a reader would see. `includeNoscript` is true for a raw (no-JavaScript) response, where the
  * <noscript> block IS the page, and false for a rendered DOM, where a browser hides it.
@@ -30,14 +114,16 @@ export function tagsToText(html: string): string {
 }
 
 export function textOf(html: string, includeNoscript: boolean): string {
-  let h = html
+  // Only the body is text a reader sees: the <title> and other <head> text are not part of innerText.
+  const body = findTags(html, 'body')[0];
+  let h = (body ? html.slice(body.end) : html)
     .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
     .replace(/<svg\b[\s\S]*?<\/svg>/gi, ' ')
     .replace(/<template\b[\s\S]*?<\/template>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ');
   if (!includeNoscript) h = h.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ');
-  return tagsToText(h);
+  return tagsToText(stripHidden(h));
 }
 
 export function wordCount(text: string): number {
@@ -46,8 +132,18 @@ export function wordCount(text: string): number {
 
 /** Real <a href> links. Click handlers on buttons and divs are not links and are not counted. */
 export function anchorCount(html: string, includeNoscript: boolean): number {
-  const h = includeNoscript ? html : html.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ');
-  return (h.match(/<a\s[^>]*\bhref\s*=\s*["'][^"'#\s][^"']*["']/gi) || []).length;
+  // Inert markup is not a link a reader or crawler sees: <template> contents, markup quoted inside
+  // scripts (inline JSON / HTML strings) and comments (MDN: 169 counted vs 158 real anchors).
+  let h = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<template\b[\s\S]*?<\/template>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
+  if (!includeNoscript) h = h.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ');
+  // Same rule as the scanner's own link list: a real href, not an in-page '#' jump or a javascript:/mailto:/tel: pseudo-link.
+  return findTags(h, 'a').filter((t) => {
+    const href = (t.attrs.href || '').trim();
+    return href !== '' && !href.startsWith('#') && !/^(javascript|mailto|tel):/i.test(href);
+  }).length;
 }
 
 /** <button>s and anchors inside header/nav/footer regions: navigation built from non-links shows up as buttons > anchors. */

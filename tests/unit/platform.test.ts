@@ -223,7 +223,7 @@ describe('crawler: new checks', () => {
 
   it('classifies security headers', () => {
     expect(securityHeadersFrom({}, 'http://x.test')).toEqual({
-      https: false, hsts: false, csp: false, xFrameOptions: false, xContentTypeOptions: false, referrerPolicy: false
+      https: false, hsts: false, csp: false, cspReportOnly: false, xFrameOptions: false, xContentTypeOptions: false, referrerPolicy: false
     });
     expect(
       securityHeadersFrom(

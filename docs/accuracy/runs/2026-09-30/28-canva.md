@@ -110,4 +110,34 @@ Added by the checker: search/assistant crawlers blocked; AI-training crawler blo
 
 ## Reviewer verdict
 
-_to be completed by a human reviewer_
+Reviewer R5. Counts: ACCURATE 2, INACCURATE 5, MISLEADING 8, UNSUPPORTED 5, SUBJECTIVE 0.
+
+Summary: the audit is of the wrong page, and the cause is the scanner's own User-Agent. Live tests (curl, one request per UA, plus node fetch and puppeteer):
+- Real browser UA (Chrome/130 or Safari 17), even from plain curl: HTTP 200, 470 KB, title "Canva: Visual Suite for Everyone".
+- The scanner's Chromium UA "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SEO-Scan-Pro/1.1" (lib/crawler.ts:9) and "Mozilla/5.0 (compatible; SEOScanPro/1.1; ...)": HTTP 200 "Unsupported client - Canva" (10 KB). That is the page the scanner audited (rendered status was 200, not 403 as the executive summary says).
+- No User-Agent, curl default, bare "Mozilla/5.0", and ALL 13 crawler UAs in lib/audit/botAccess.ts (also Googlebot/Bingbot): HTTP 403, 755 KB Cloudflare challenge page ("We'll have you designing again soon", challenge_title).
+- Node fetch (undici) with a full Chrome UA also got 403 in my test while curl with the same UA got 200, so Cloudflare also uses the TLS/HTTP fingerprint, not only the UA.
+So the site does NOT refuse every non-browser client: it serves the real page to anything that claims to be a normal browser, challenges bot/unknown/empty identities, and shows "Unsupported client" to a UA that looks like a browser but has no engine token. All 13 "refused" results are therefore the site's reaction to a spoofed UA on a datacenter-style client; they say nothing about whether real GPTBot/Googlebot (verified by IP) are let in. The scan's "baseline 200" was the Unsupported-client page (default UA), a different transport and identity from the probes (A-02).
+Real page (puppeteer, Chrome UA): title as above, canonical https://www.canva.com/, lang en, 1 H1, 36 H2, 7 images (5 alt=""), 411 anchors, 107 hreflang, JSON-LD Organization + ContactPoint (no WebSite), og:title/twitter:title present, no noindex, 738 visible words; raw HTML (no JS) 1245 words / 404 links, i.e. server-rendered; sitemap via robots Sitemap directive 200, llms.txt 404, no FAQ/how-it-works.
+Measurement mismatches: title, canonical, H2, links, JSON-LD, words, hreflang, images, rendered words: all scanner-side, the interstitial (A-03 plus the UA cause below). raw links 99 vs 1: both wrong; the scanner's raw fetch (node, Chrome/124 Linux UA) got the 403 challenge page (755 KB, 32 words, 99 links of the challenge), ground's JS-disabled Chromium got the same challenge (31 words, 1 link); the truth is 1245 words / 404 links. robots "blocks all" true in ground: ground-tool bug, the file is "User-agent: * / Disallow: " (empty) plus pattern Disallows (A-12). Bot 403s: scanner and ground agree (both 403); the sheet's MISMATCH label is only the "refused vs baseline" rule. sitemap found true and llms false are right. Scores (62; -30 for noindex, -20 no JSON-LD, -32 crawlers refused, -30 thin) are all derived from the interstitial and should be discarded.
+
+1. MISLEADING: the 403s are real for those UAs (reproduced) but caused by UA spoofing; IP-verified Googlebot/Bingbot/Applebot cannot be tested this way (A-02).
+2. MISLEADING: duplicate of 1; "block is at the server/WAF layer, not robots.txt" is true for the challenge; "every tested crawler" true for spoofed UAs only.
+3. ACCURATE: title, description, H1 "Please update your browser", noindex,nofollow,noarchive all confirmed for that response. But it never says why (the scanner's UA), and the summary calls it "HTTP 403" while the rendered status was 200 (the 403 was the raw challenge fetch).
+4. MISLEADING: true of the interstitial only; the real page has a canonical and 2 JSON-LD types (checker flags confirm).
+5. MISLEADING: the 4 images are Chrome/Firefox/Safari/Edge logos on the Unsupported-client page; the real page has 7 images, 5 decorative.
+6. MISLEADING: og:title/twitter:title exist on the real page ("Canva: Visual Suite for Everyone"); the error string is the interstitial's description.
+7. MISLEADING: same as 1.
+8. MISLEADING: same as 1, for training crawlers.
+9. MISLEADING: tells the owner to fix something a real browser never sees; the interstitial appears for the scanner's own UA (reproduced both ways).
+10. INACCURATE: the real homepage has a self-referencing canonical.
+11. INACCURATE: the real homepage has JSON-LD (Organization, ContactPoint). Adding WebSite would still be fair advice, but "no JSON-LD" is false.
+12. INACCURATE: advice for 4 images that are not on the site.
+13. INACCURATE: og:title and twitter:title exist; the error string is not the site's og:description.
+14. INACCURATE: compares two challenge/interstitial pages. Real raw HTML is 1245 words / 404 links, so the homepage is not a JS-only shell.
+15. ACCURATE: https://www.canva.com/llms.txt is 404 for a browser UA (the scan saw 403, so the evidence was weak, but the claim is true). Low priority is right.
+16. UNSUPPORTED: FAQ absence was read from the interstitial; true on the real page (no FAQ text) by luck.
+17. UNSUPPORTED: derived from the interstitial; the real page links to /pricing prominently ("Plans").
+18. UNSUPPORTED: derived from the interstitial (real page also lacks it).
+19. UNSUPPORTED: derived from the interstitial; real page has contact links in nav/footer.
+20. UNSUPPORTED: derived from the interstitial.

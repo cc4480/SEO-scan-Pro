@@ -40,12 +40,8 @@ function matches(pattern: string, path: string): boolean {
   return new RegExp('^' + source + (anchored ? '$' : '')).test(path);
 }
 
-/** True when `agentToken` (e.g. "GPTBot") may fetch `path` under this robots.txt. */
-export function robotsAllows(robotsText: string, agentToken: string, path = '/'): boolean {
-  const groups = parseRobots(robotsText);
-  const token = agentToken.toLowerCase();
-
-  // Specific group: the longest agent name that is contained in the crawler's token.
+/** The group that governs `token`: the most specific named group, else the "*" group, else none. */
+function groupFor(groups: Group[], token: string): Group | null {
   let best: Group | null = null;
   let bestLen = -1;
   for (const g of groups) {
@@ -53,7 +49,13 @@ export function robotsAllows(robotsText: string, agentToken: string, path = '/')
       if (a !== '*' && token.includes(a) && a.length > bestLen) { best = g; bestLen = a.length; }
     }
   }
-  if (!best) best = groups.find((g) => g.agents.includes('*')) ?? null;
+  return best ?? groups.find((g) => g.agents.includes('*')) ?? null;
+}
+
+/** True when `agentToken` (e.g. "GPTBot") may fetch `path` under this robots.txt. */
+export function robotsAllows(robotsText: string, agentToken: string, path = '/'): boolean {
+  const groups = parseRobots(robotsText);
+  const best = groupFor(groups, agentToken.toLowerCase());
   if (!best) return true;
 
   let verdict = true;
@@ -64,4 +66,34 @@ export function robotsAllows(robotsText: string, agentToken: string, path = '/')
     if (len > longest || (len === longest && r.allow)) { longest = len; verdict = r.allow; }
   }
   return verdict;
+}
+
+export type RobotsAccess = 'allowed' | 'partial' | 'disallowed';
+
+// A group that shuts a crawler out of the whole site has a "Disallow: /" and nothing it can reach.
+function groupShutsOutAll(g: Group): boolean {
+  return g.rules.some((r) => !r.allow && r.pattern === '/') && !g.rules.some((r) => r.allow);
+}
+
+/**
+ * What robots.txt grants one crawler, using the group that governs it (a named group overrides "*").
+ * 'allowed' = the home page may be fetched; 'partial' = the home page is off limits but some paths are
+ * explicitly allowed (LinkedIn's named groups for Googlebot and Bingbot); 'disallowed' = nothing is.
+ */
+export function robotsAccess(robotsText: string, agentToken: string): RobotsAccess {
+  if (robotsAllows(robotsText, agentToken, '/')) return 'allowed';
+  const g = groupFor(parseRobots(robotsText), agentToken.toLowerCase());
+  return g && !groupShutsOutAll(g) ? 'partial' : 'disallowed';
+}
+
+/**
+ * True only when the whole site is closed to crawlers: the "*" group disallows "/" AND no named crawler
+ * group grants any access. A "*" block that named groups carve exceptions out of is NOT "blocks everyone".
+ */
+export function robotsBlocksEveryone(robotsText: string): boolean {
+  const groups = parseRobots(robotsText);
+  const star = groups.find((g) => g.agents.includes('*'));
+  if (!star || robotsAllows(robotsText, '*', '/')) return false;
+  const namedGrantsAccess = groups.some((g) => !g.agents.includes('*') && !groupShutsOutAll(g));
+  return !namedGrantsAccess;
 }
