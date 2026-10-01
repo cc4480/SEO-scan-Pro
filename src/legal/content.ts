@@ -60,9 +60,11 @@ export const TERMS: LegalDoc = {
       ]
     },
     {
-      heading: '7. Fees',
+      heading: '7. Plans and fees',
       body: [
-        'The Service may be offered free of charge for now. If we introduce paid plans, we will tell you before anything is charged and you will not be billed without agreeing to a plan.'
+        'The Service has a free plan and paid subscription plans (currently Starter and Agency). The features, scan allowances and prices of each plan are shown on our pricing page when you subscribe. Allowances are measured over a rolling 30 days.',
+        'Paid plans renew automatically each month or year until you cancel. Payments are processed by Stripe; we never see or store your card number. You can cancel at any time from Manage billing in the app: cancellation takes effect at the end of the period you have already paid for, and you keep access until then. Fees for a period that has already started are not refunded, except where the law requires it.',
+        'If a payment fails we will ask you to update your card, and we may move the account to the free plan if it stays unpaid. We will give notice before changing the price of an existing subscription.'
       ]
     },
     {
@@ -102,6 +104,7 @@ export const PRIVACY: LegalDoc = {
         'Account data: your email address, optional name, and a password stored only as a one-way bcrypt hash.',
         'Scan data: the URLs you ask us to scan, the results of crawling them (page metadata, headings, link and image counts, security headers, performance timings), the AI-written report, and the audit log of each scan.',
         'Settings you choose: agency name, colours, logo URL, report footer, webhook URL, monitoring email address and scheduled monitors.',
+        'Billing data: if you subscribe, your Stripe customer and subscription identifiers, your plan, its status and renewal date. Your card number and payment details are handled by Stripe and never reach our servers.',
         'Lead data: if you use the embeddable widget, the name and email address a visitor types in, stored in your account against the scan they ran.',
         'Technical data: your IP address is used to apply rate limits and may appear in our hosting provider’s request logs. We store a session token in your browser’s local storage to keep you signed in.'
       ]
@@ -118,6 +121,7 @@ export const PRIVACY: LegalDoc = {
       bullets: [
         'Railway — hosts the application and its database.',
         'DeepSeek — receives a structured summary of each crawl so it can write the analysis: the page URL, meta tags, heading text, structured-data types, counts of links and images, security headers and performance timings. It does not receive the full page content. If the AI is unavailable or not configured, a rule-based report is generated without sending anything to it.',
+        'Stripe — processes subscription payments and sends receipts. It receives your email address and what you buy.',
         'Resend — delivers our emails (address confirmation, password reset, and score-drop alerts you turn on).',
         'If you configure a webhook, your report data is sent to the address you provide.'
       ]

@@ -18,9 +18,18 @@ Current production: Railway project `seoscan-pro` (services `web` + `Postgres`),
 
 ## Needs you (account access or a decision)
 
-1. **Billing.** Nothing charges yet and there is no plan/quota model beyond the daily allowance. Decide
-   pricing, then add Stripe (plans, checkout, webhook, per-plan limits). Until then the Terms say the
-   service "may be offered free of charge for now".
+1. **Turn billing on.** The code is built and tested but switched off: no plan limits apply until Stripe is
+   configured. Plans: Free (3 audits/30 days, single page), Starter $24/mo ($230/yr), Agency $49/mo ($470/yr);
+   the limits live in `src/plans.ts`. To enable:
+   1. In Stripe, run `STRIPE_SECRET_KEY=sk_test_... npm run stripe:setup -- --webhook-url=https://YOUR_APP/api/stripe/webhook`
+      (test mode first). It creates the two products, four prices and the webhook, and prints the variables.
+   2. Enable the Customer Portal in Stripe (Settings → Billing → Customer portal): allow cancel and card updates.
+   3. Set `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and the four `STRIPE_PRICE_*` variables on the Railway `web` service.
+   4. **Before** enabling, set `COMPED_EMAILS` to your own address(es). Once billing is on, every account without a
+      subscription is on the Free plan, including yours.
+   5. Test end to end with Stripe's test card 4242 4242 4242 4242, then repeat the setup with live keys.
+   Decide on a refund policy (the Terms currently say fees for a started period are not refunded except where
+   required by law) and consider Stripe Tax if you sell to customers who owe VAT/sales tax.
 2. **Custom domain.** Add it in Railway (Settings → Networking), then set `APP_URL` to it (drives CORS,
    email links, canonical/OG URLs). If Cloudflare proxies it, set `TRUST_PROXY_HOPS=2`.
 3. **Email sender.** `EMAIL_FROM` must be on a domain verified in Resend (SPF/DKIM). Until the

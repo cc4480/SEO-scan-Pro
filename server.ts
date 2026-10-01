@@ -24,6 +24,9 @@ import { renderHtmlToPdf } from './lib/pdf';
 import { dailyScanLimit, scansInLast24h } from './lib/dailyQuota';
 import { loadIndexTemplate, renderIndex, INDEXABLE_PATHS } from './lib/indexHtml';
 import { contentSecurityPolicy } from './lib/csp';
+import { mountBillingRoutes, mountStripeWebhook } from './lib/billingRoutes';
+import { billingEnabled, cancelSubscriptionNow } from './lib/billing';
+import { brandedSettings, denyFeature, denyMonitors, denyScanQuota, entitlementFor, entitlementForUserId, scansInLast30Days } from './lib/entitlements';
 import { Scan, WhiteLabelSettings } from './src/types';
 import { buildAgentReadyPrompt } from './src/agentPrompt';
 
@@ -143,6 +146,8 @@ export function createApp() {
     if (!req.path.startsWith('/embed')) res.setHeader('X-Frame-Options', 'DENY');
     next();
   });
+  // Stripe signs the raw request bytes, so its webhook is mounted before the JSON body parser.
+  mountStripeWebhook(app);
   app.use(express.json());
   // `localhost` and `127.0.0.1` are the same server but different browser origins, and
   // users mix them freely when opening a local app — allow every loopback spelling.
@@ -378,8 +383,10 @@ export function createApp() {
   // Non-secret deployment facts the legal pages need. SUPPORT_EMAIL is optional; without it the
   // pages simply omit the contact line rather than invent one.
   app.get('/api/public-config', (req, res) => {
-    res.json({ supportEmail: process.env.SUPPORT_EMAIL || null });
+    res.json({ supportEmail: process.env.SUPPORT_EMAIL || null, billingEnabled: billingEnabled() });
   });
+
+  mountBillingRoutes(app);
 
   // ===== PROTECTED ENDPOINTS (Require Authentication) =====
 
@@ -473,6 +480,17 @@ export function createApp() {
         return res.status(401).json({ error: 'Current password is incorrect' });
       }
 
+      // Never leave a card being charged for an account that no longer exists. If Stripe cannot be
+      // reached the deletion is refused, so the user can retry or cancel from the billing portal.
+      if (user.stripeSubscriptionId && billingEnabled()) {
+        try {
+          await cancelSubscriptionNow(user.stripeSubscriptionId);
+        } catch (err) {
+          console.error('Could not cancel subscription during account deletion:', err);
+          return res.status(502).json({ error: 'We could not cancel your subscription, so your account was not deleted. Please try again, or cancel from Billing first.' });
+        }
+      }
+
       await prisma.user.delete({ where: { id: user.id } });
       res.json({ success: true });
     } catch (err) {
@@ -489,6 +507,10 @@ export function createApp() {
       });
       if (!settings) {
         return res.status(404).json({ error: 'Settings not found' });
+      }
+      const ent = await entitlementForUserId(req.userId!);
+      if (ent && ent.enforced && !ent.def.whiteLabel) {
+        return res.json({ ...brandedSettings(settings, ent), brandingLocked: true });
       }
       res.json(settings);
     } catch (err) {
@@ -516,14 +538,17 @@ export function createApp() {
       }
     }
     try {
+      const ent = await entitlementForUserId(req.userId!);
+      const brandingLocked = !!ent && ent.enforced && !ent.def.whiteLabel;
       const settings = await prisma.whiteLabelSettings.update({
         where: { userId: req.userId },
         data: {
-          agencyName: req.body.agencyName,
-          logoUrl: req.body.logoUrl,
-          primaryColor: req.body.primaryColor,
-          accentColor: req.body.accentColor,
-          customFooter: req.body.customFooter,
+          // Branding is a paid feature: on other plans the saved values are left exactly as they were.
+          agencyName: brandingLocked ? undefined : req.body.agencyName,
+          logoUrl: brandingLocked ? undefined : req.body.logoUrl,
+          primaryColor: brandingLocked ? undefined : req.body.primaryColor,
+          accentColor: brandingLocked ? undefined : req.body.accentColor,
+          customFooter: brandingLocked ? undefined : req.body.customFooter,
           enabledSections: req.body.enabledSections,
           language: req.body.language,
           webhookUrl: req.body.webhookUrl,
@@ -531,7 +556,7 @@ export function createApp() {
           enableEmailAlerts: req.body.enableEmailAlerts
         }
       });
-      res.json({ success: true, settings });
+      res.json({ success: true, settings: brandingLocked && ent ? { ...brandedSettings(settings as any, ent), brandingLocked: true } : settings });
     } catch (err) {
       res.status(500).json({ error: 'Failed to update settings' });
     }
@@ -705,6 +730,14 @@ export function createApp() {
         return res.status(429).json({ error: `You already have ${backlog} scans in progress. Wait for some to finish before starting more.` });
       }
 
+      // Plan limits (only enforced once billing is configured): deep crawls are a paid feature and
+      // every plan has an allowance of audits per rolling 30 days.
+      const ent = await entitlementForUserId(req.userId!);
+      if (ent && ent.enforced) {
+        const denial = (mode === 'FULL_SITE' && denyFeature(ent, 'deepCrawl')) || denyScanQuota(ent, await scansInLast30Days(req.userId!));
+        if (denial) return res.status(denial.status).json(denial.body);
+      }
+
       // Daily allowance: the burst limits above do not stop a slow drip from one account.
       const usedToday = await scansInLast24h(req.userId!);
       if (usedToday >= dailyScanLimit()) {
@@ -761,6 +794,9 @@ export function createApp() {
 
   app.post('/api/api-keys', authMiddleware, requireSession, requireVerifiedEmail, validateBody(apiKeyCreateSchema), async (req: AuthRequest, res) => {
     try {
+      const keyEnt = await entitlementForUserId(req.userId!);
+      const keyDenial = keyEnt && denyFeature(keyEnt, 'apiKeys');
+      if (keyDenial) return res.status(keyDenial.status).json(keyDenial.body);
       if ((await prisma.apiKey.count({ where: { userId: req.userId } })) >= 10) {
         return res.status(400).json({ error: 'You can have at most 10 API keys. Revoke one first.' });
       }
@@ -813,7 +849,11 @@ export function createApp() {
         if (err instanceof SsrfBlockedError) return res.status(400).json({ error: err.message });
         throw err;
       }
-      if ((await prisma.monitor.count({ where: { userId: req.userId } })) >= 10) {
+      const monEnt = await entitlementForUserId(req.userId!);
+      const monCount = await prisma.monitor.count({ where: { userId: req.userId } });
+      const monDenial = monEnt && denyMonitors(monEnt, monCount);
+      if (monDenial) return res.status(monDenial.status).json(monDenial.body);
+      if (monCount >= 10) {
         return res.status(400).json({ error: 'You can have at most 10 monitors. Delete one first.' });
       }
       // nextRunAt defaults to now, so the first scheduler tick runs it immediately and the trend
@@ -899,6 +939,13 @@ export function createApp() {
       const user = await prisma.user.findUnique({ where: { widgetKey } });
       if (!user) {
         return res.status(404).json({ error: 'Invalid widget key. This embed is not linked to an active account.' });
+      }
+      const ownerEnt = entitlementFor(user);
+      if (denyFeature(ownerEnt, 'widget')) {
+        return res.status(403).json({ error: "This embed is not active: the account owner's plan does not include the audit widget." });
+      }
+      if (denyScanQuota(ownerEnt, ownerEnt.enforced ? await scansInLast30Days(user.id) : 0)) {
+        return res.status(429).json({ error: 'This audit widget has reached its monthly limit. Please try again later.' });
       }
       if (verificationRequired() && !user.emailVerifiedAt) {
         return res.status(403).json({ error: 'This embed is not active yet: the account owner has not confirmed their email address.' });
@@ -990,7 +1037,9 @@ export function createApp() {
         where: { userId: scan.userId }
       });
 
-      const reportHtml = generateReportHtml(scan as any, settings as any);
+      const reportEnt = await entitlementForUserId(scan.userId);
+      const reportSettings = settings && reportEnt ? brandedSettings(settings as any, reportEnt) : settings;
+      const reportHtml = generateReportHtml(scan as any, reportSettings as any);
       const safeFilename = `seo_audit_${scan.url.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
       if (req.query.format === 'pdf') {

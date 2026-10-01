@@ -6,11 +6,13 @@ import { Marquee, Stats, XRay } from './Showpieces';
 import { ScrollTrigger, scrollToId, scrollToTop, startSmoothScroll } from './motionKit';
 import ScrollAudit from './ScrollAudit';
 import { Agencies, Deliverable, Faq, FinalCta, Features, Problem } from './Sections';
+import Pricing from './Pricing';
 
 const LINKS = [
   { href: '#features', label: 'Features' },
   { href: '#how', label: 'How it works' },
   { href: '#agencies', label: 'Agencies' },
+  { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' }
 ];
 
@@ -115,6 +117,7 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
           <ScrollAudit />
           <Deliverable />
           <Agencies onGetStarted={onGetStarted} />
+          <Pricing onGetStarted={onGetStarted} />
           <Faq />
           <FinalCta onGetStarted={onGetStarted} />
         </main>

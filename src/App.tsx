@@ -12,6 +12,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
 import ScanRunningPanel from './components/ScanRunningPanel';
 import AnimatedNumber from './ui/AnimatedNumber';
+import BillingPanel from './billing/BillingPanel';
+import { fetchBilling, type BillingStatus } from './billing/billingApi';
 import LegalPage from './legal/LegalPage';
 // The landing page carries the animation libraries; signed-in users never download them.
 const Landing = lazy(() => import('./landing/Landing'));
@@ -28,7 +30,7 @@ import LeadsPanel from './components/LeadsPanel';
 import { downloadWithAuth } from './download';
 import {
   Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
-  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog, Activity, Users, Download, Search
+  RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog, CreditCard, Activity, Users, Download, Search
 } from 'lucide-react';
 
 export default function App() {
@@ -59,7 +61,10 @@ export default function App() {
     enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
     language: 'en'
   });
-  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'monitoring' | 'leads' | 'settings' | 'widget' | 'benchmark' | 'account'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'compare' | 'monitoring' | 'leads' | 'settings' | 'widget' | 'benchmark' | 'billing' | 'account'>('audit');
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  // Where Stripe sent the browser back from (?billing=success|cancel|portal), handled once signed in.
+  const [billingReturn] = useState<string | null>(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('billing')));
   const [activeScan, setActiveScan] = useState<Scan | null>(null);
   const [selectedCompareScan, setSelectedCompareScan] = useState<Scan | undefined>(undefined);
   const [isCrawlLoading, setIsCrawlLoading] = useState(false);
@@ -185,6 +190,31 @@ export default function App() {
     const t = setTimeout(() => setHistoryQuery(searchText.trim()), 300);
     return () => clearTimeout(t);
   }, [searchText]);
+
+  // Plan and usage, loaded once signed in. After Stripe sends the browser back, open the Billing tab and,
+  // on success, poll briefly: the plan changes when Stripe's webhook lands, a moment after the redirect.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      let status = await fetchBilling();
+      if (cancelled) return;
+      setBilling(status);
+      if (!billingReturn || !status?.enabled) return;
+      setActiveTab('billing');
+      window.history.replaceState({}, '', window.location.pathname);
+      if (billingReturn === 'cancel') { notify('Checkout cancelled. You have not been charged.', 'info'); return; }
+      if (billingReturn !== 'success') return;
+      const before = status.plan;
+      for (let i = 0; i < 10 && status && status.plan === before && before === 'FREE' && !cancelled; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        status = await fetchBilling();
+        if (status && !cancelled) setBilling(status);
+      }
+      if (!cancelled) notify(status && status.plan !== 'FREE' ? `You are now on the ${status.limits.name} plan. Thank you!` : 'Payment received. Your plan will update in a moment.', status && status.plan !== 'FREE' ? 'success' : 'info');
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
 
   // Fetch scan history + branding once the user is signed in, and refetch when a filter changes.
   useEffect(() => {
@@ -467,8 +497,8 @@ export default function App() {
             </div>
             <div className="h-6 w-px bg-white/10" />
             <div className="text-right">
-              <div className="text-[9px] text-slate-400 uppercase font-black">Active Mode</div>
-              <div className="text-xs font-bold text-blue-400">Enterprise Agency</div>
+              <div className="text-[9px] text-slate-400 uppercase font-black">{billing?.enabled ? 'Your Plan' : 'Active Mode'}</div>
+              <div className="text-xs font-bold text-blue-400">{billing?.enabled ? (billing.comped ? 'Agency (complimentary)' : `${billing.limits.name} plan`) : 'Enterprise Agency'}</div>
             </div>
             <div className="h-6 w-px bg-white/10" />
             <button
@@ -494,6 +524,7 @@ export default function App() {
             { id: 'settings', label: 'White-Label Presets', icon: Palette },
             { id: 'widget', label: 'Client Lead Widget', icon: Code },
             { id: 'benchmark', label: 'Competitor Benchmark', icon: Award },
+            ...(billing?.enabled ? [{ id: 'billing', label: 'Billing', icon: CreditCard }] : []),
             { id: 'account', label: 'Account', icon: UserCog }
           ].map(tab => {
             const Icon = tab.icon;
@@ -720,12 +751,19 @@ export default function App() {
           )}
 
           {/* TAB 3: WHITE LABEL AGENCY EDIT */}
+          {activeTab === 'billing' && billing?.enabled && (
+            <div className="max-w-6xl mx-auto">
+              <BillingPanel billing={billing} />
+            </div>
+          )}
+
           {activeTab === 'settings' && (
             <div className="max-w-3xl mx-auto">
               <WhiteLabelEditor
                 settings={settings}
                 onSaveSettings={saveBrandSettings}
                 isSaving={isSavingSettings}
+                onUpgrade={() => setActiveTab('billing')}
               />
             </div>
           )}

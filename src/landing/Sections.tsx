@@ -163,6 +163,7 @@ const FAQS = [
   { q: 'Does it work on JavaScript-heavy sites?', a: 'Yes. Pages are loaded in a real headless browser, so content rendered by JavaScript is analysed, not just the initial HTML.' },
   { q: 'Is the AI required?', a: 'The analysis uses DeepSeek. If it is unavailable, a deterministic local report is generated from the crawl statistics so the workflow never breaks, and the saved audit log records which one you got.' },
   { q: 'What happens to the URLs I scan?', a: 'The scanner fetches the public page and its supporting files. A structured summary of what it found is sent to DeepSeek to write the analysis. Private and internal addresses are refused.' },
+  { q: 'Is there a free plan?', a: 'Yes. Free includes three single-page audits every 30 days with the full AI report, fix checklist and PDF download. Paid plans add deep crawls, white-label reports, monitors, and for agencies the lead-capture widget and API.' },
   { q: 'Can I put my own branding on reports?', a: 'Yes. Set your agency name, colours, footer and which sections appear, then download the report as PDF or HTML.' },
   { q: 'Can it scan pages behind a login?', a: 'No. It audits what a public visitor or search crawler can reach.' }
 ];

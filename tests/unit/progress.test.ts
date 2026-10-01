@@ -159,7 +159,7 @@ describe('DeepSeek step logs which engine actually wrote the report', () => {
 
     expect(out.score.overall).toBe(71);
     const ai = events.filter((e) => e.stage === 'ai').map((e) => e.msg);
-    expect(ai.some((m) => /sending .*KB crawl payload to deepseek-chat/.test(m))).toBe(true);
+    expect(ai.some((m) => /sending .*KB crawl payload to deepseek-flash/.test(m))).toBe(true);
     expect(ai.some((m) => /DeepSeek accepted the request \(HTTP 200\) after/.test(m))).toBe(true);
     expect(ai.some((m) => /full report received after/.test(m))).toBe(true);
     expect(ai.some((m) => m === 'scores: overall 71 · technical 60 · content 70 · AEO/GEO 80 · performance 90')).toBe(true);

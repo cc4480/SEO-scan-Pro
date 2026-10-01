@@ -72,6 +72,8 @@ Set these variables on the service (see `.env.example` for all of them):
 | `DEEPSEEK_API_KEY` | Without it every report comes from the offline fallback generator. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Without them password reset and alerts cannot send. |
 | `TRUST_PROXY_HOPS` | Default `1` (Railway edge). Use `2` if Cloudflare also proxies in front; wrong values make per-IP rate limits share or forge the client IP. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_*` (4) | Optional. All six together switch billing on (Free / Starter / Agency); see DEPLOYMENT.md. |
+| `COMPED_EMAILS` | Optional. Emails that get full Agency access without a subscription. |
 | `SUPPORT_EMAIL` | Optional. Contact address shown on the Terms and Privacy pages. |
 | `DAILY_SCAN_LIMIT` | Optional. Manual scans per account per rolling 24 hours (default 25). |
 

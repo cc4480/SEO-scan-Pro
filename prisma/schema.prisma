@@ -20,6 +20,15 @@ model User {
   tokenVersion Int   @default(0)
   // Null until the owner clicks the link emailed at signup (or after an email change).
   emailVerifiedAt DateTime?
+  // Billing. `plan` is what the account is entitled to right now (FREE | STARTER | AGENCY); it is
+  // only ever changed by the Stripe webhook, never by the browser.
+  plan                 String    @default("FREE")
+  planStatus           String?   // Stripe subscription status: active | trialing | past_due | canceled | ...
+  planInterval         String?   // month | year
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -32,6 +41,16 @@ model User {
   apiKeys      ApiKey[]
 
   @@map("users")
+}
+
+// Stripe retries webhooks and can deliver them twice or out of order; recording each event id makes
+// handling idempotent.
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+
+  @@map("stripe_events")
 }
 
 model EmailVerificationToken {

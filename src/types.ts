@@ -175,6 +175,8 @@ export interface WhiteLabelSettings {
   webhookSecret?: string;
   monitoringEmail?: string;
   enableEmailAlerts?: boolean;
+  /** Set by the server when the account's plan does not include white-label branding. */
+  brandingLocked?: boolean;
 }
 
 export interface Scan {

@@ -11,6 +11,7 @@
     "postinstall": "prisma generate",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
+    "stripe:setup": "tsx scripts/stripe-setup.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -35,6 +36,7 @@
     "puppeteer": "^25.11.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "stripe": "^22.6.2",
     "vite": "^6.2.3",
     "zod": "^3.23.8"
   },

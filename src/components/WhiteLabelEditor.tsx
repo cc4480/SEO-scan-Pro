@@ -8,6 +8,8 @@ interface WhiteLabelEditorProps {
   settings: WhiteLabelSettings;
   onSaveSettings: (updated: WhiteLabelSettings) => void;
   isSaving: boolean;
+  /** Opens the Billing tab. */
+  onUpgrade?: () => void;
 }
 
 const colorPalettes = [
@@ -24,7 +26,7 @@ const presetLogos = [
   { name: 'Helix Analytics', url: 'https://images.unsplash.com/photo-1561070791-26c113006238?w=100&h=100&auto=format&fit=crop&q=60' }
 ];
 
-export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }: WhiteLabelEditorProps) {
+export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, onUpgrade }: WhiteLabelEditorProps) {
   const [agencyName, setAgencyName] = useState(settings.agencyName || 'SEO Audit Pro');
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
   const [primaryColor, setPrimaryColor] = useState(settings.primaryColor);
@@ -79,6 +81,12 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving }:
 
   return (
     <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl">
+      {settings.brandingLocked && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+          <span>White-label branding is part of the Starter plan and above. Reports currently carry SEO Scan Pro branding, and branding changes are not applied.</span>
+          {onUpgrade && <button type="button" onClick={onUpgrade} className="rounded-lg bg-amber-300 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-200">See plans</button>}
+        </div>
+      )}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
           <Palette className="text-blue-400 h-5 w-5" />
