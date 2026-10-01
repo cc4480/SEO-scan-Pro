@@ -173,6 +173,32 @@ export function finalizeReport(input: DeepSeekSeoReport, crawl: CrawlResult): De
     });
   }
 
+  // Calibrate the model's severity against the measurements. It tends to shout ("severe", "critical",
+  // "high") about numbers that do not warrant it.
+  const page = crawl.mainPage;
+  const networkBound = !!page.ttfbMs && !!page.loadTimeMs && page.ttfbMs / page.loadTimeMs >= 0.7;
+  const NOTE = ' (Measured from the scanning host, so part of this may be network distance; confirm from where your visitors are.)';
+  const downgrade = (f: Fix) => ({ ...f, priority: (f.priority === 'high' ? 'medium' : f.priority) as Fix['priority'] });
+  if (networkBound) {
+    report.recommendedFixes = report.recommendedFixes.map((f) => {
+      if (!/ttfb|time to first byte|server response|response time|\blcp\b|largest contentful/.test(textOf(f))) return f;
+      const out = downgrade(f);
+      if (!/scanning host|auditing host/i.test(out.description)) out.description = out.description + NOTE;
+      return out;
+    });
+  }
+  // A moderate JavaScript gap is a medium finding, not a critical one; only the measured severe case is critical.
+  if (rvr && !newFixes.some((n) => n.title.startsWith('Put the main content'))) {
+    const jsText = (t: string) => /javascript|client-side render|server-?side render|pre-?render|raw html/.test(t);
+    report.criticalIssues = report.criticalIssues.filter((issue) => {
+      // Navigation built from buttons is its own finding, not a JavaScript-gap one.
+      const drop = jsText(issue.toLowerCase()) && !/button|anchor/.test(issue.toLowerCase());
+      if (drop) removed.push({ title: issue, reason: `the gap is moderate (${rvr.rawWords} of ${rvr.renderedWords} words are in the raw HTML), so it is reported as a medium finding, not critical` });
+      return !drop;
+    });
+    report.recommendedFixes = report.recommendedFixes.map((f) => (jsText(textOf(f)) ? downgrade(f) : f));
+  }
+
   // 3. AEO notes: FAQ/HowTo rich results are gone, but the markup is still valid.
   if (report.aeoAssessment) {
     report.aeoAssessment.richSnippetEligibility = (report.aeoAssessment.richSnippetEligibility ?? []).filter((t) => !/faq|how-?to/i.test(t));

@@ -460,3 +460,53 @@ describe('found by auditing SEO Scan Pro with itself', () => {
     expect(contentSignals('<nav><a href="#features">Features</a></nav><h2>Pricing</h2>', '', 0).sections.howItWorks).toBe(false);
   });
 });
+
+describe('severity calibration', () => {
+  const fix = (title: string, priority: 'high' | 'medium' | 'low', description: string) => ({ title, category: 'performance' as const, priority, description, remediation: 'Do it.' });
+
+  it('downgrades TTFB/LCP findings to medium when the time is mostly network distance, and says so', () => {
+    const c = crawl();
+    c.mainPage.ttfbMs = 3500; c.mainPage.loadTimeMs = 3900;
+    const d = draft();
+    d.recommendedFixes.push(fix('Reduce server response time (TTFB)', 'high', 'TTFB is 3500 ms.'));
+    d.recommendedFixes.push(fix('Improve Largest Contentful Paint', 'high', 'LCP is 4900 ms.'));
+    const out = finalizeReport(d, c);
+    const ttfb = out.recommendedFixes.find((f) => f.title.startsWith('Reduce server response'))!;
+    expect(ttfb.priority).toBe('medium');
+    expect(ttfb.description).toMatch(/scanning host/);
+    expect(out.recommendedFixes.find((f) => f.title.startsWith('Improve Largest'))!.priority).toBe('medium');
+  });
+
+  it('leaves performance priorities alone when the server itself is slow relative to the rest', () => {
+    const c = crawl();
+    c.mainPage.ttfbMs = 200; c.mainPage.loadTimeMs = 3900;
+    const d = draft();
+    d.recommendedFixes.push(fix('Reduce server response time (TTFB)', 'high', 'TTFB is 200 ms.'));
+    expect(finalizeReport(d, c).recommendedFixes.find((f) => f.title.startsWith('Reduce server response'))!.priority).toBe('high');
+  });
+
+  it('reports a moderate JavaScript gap as medium, not critical', () => {
+    const c = crawl();
+    c.facts!.rawVsRendered!.rawWords = 664; c.facts!.rawVsRendered!.renderedWords = 1208; c.facts!.rawVsRendered!.schemaOnlyAfterJs = [];
+    const d = draft();
+    d.criticalIssues.push('Severe JavaScript dependency: raw HTML has 664 words but the rendered page has 1208.');
+    d.recommendedFixes.push({ title: 'Eliminate JavaScript dependency for core content', category: 'aeo-geo', priority: 'high', description: 'Render on the server.', remediation: 'Server-side render the page.' });
+    const out = finalizeReport(d, c);
+    expect(out.criticalIssues.join(' ')).not.toMatch(/Severe JavaScript/);
+    expect(out.recommendedFixes.find((f) => f.title.startsWith('Eliminate JavaScript'))!.priority).toBe('medium');
+  });
+
+  it('does not demote a navigation-buttons critical issue with the JavaScript-gap reason', () => {
+    const c = crawl();
+    c.facts!.rawVsRendered!.rawWords = 664; c.facts!.rawVsRendered!.renderedWords = 1208; c.facts!.rawVsRendered!.schemaOnlyAfterJs = [];
+    const d = draft();
+    d.criticalIssues.push('Navigation is built from buttons, not anchors; the raw HTML exposes few links.');
+    const out = finalizeReport(d, c);
+    expect(out.criticalIssues.join(' ')).toMatch(/Navigation is built from buttons/);
+  });
+
+  it('keeps the severe case critical when the raw HTML is nearly empty', () => {
+    const out = finalizeReport(draft(), crawl()); // 182 raw vs 739 rendered words
+    expect(out.recommendedFixes.some((f) => f.title.startsWith('Put the main content'))).toBe(true);
+  });
+});
