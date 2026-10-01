@@ -62,7 +62,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetLink: string)
   // deliberately never logged (sendEmail's stub logs the subject, not the body).
   await sendEmail({
     to: toEmail,
-    subject: 'Reset your SEO Scan Pro password',
+    subject: 'Reset your SeoScan password',
     text: `Someone asked to reset the password for this account.\n\nReset it here (valid for 1 hour, single use):\n${resetLink}\n\nIf this was not you, ignore this email.`,
     html: `<p>Someone asked to reset the password for this account.</p><p><a href="${escapeHtml(resetLink)}">Reset your password</a> (valid for 1 hour, single use).</p><p>If this was not you, ignore this email.</p>`
   });

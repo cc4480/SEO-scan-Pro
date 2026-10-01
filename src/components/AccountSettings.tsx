@@ -213,7 +213,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
       {/* Change Password */}
       <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl">
         <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1">
-          <KeyRound className="h-5 w-5 text-blue-400" />
+          <KeyRound className="h-5 w-5 text-brand-400" />
           Change Password
         </h3>
         <p className="text-xs text-slate-400 mb-5">Requires your current password to confirm it's you.</p>
@@ -239,7 +239,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             onChange={(e) => setCurrentPasswordForPw(e.target.value)}
             required
             disabled={isPwLoading}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <input
             type="password"
@@ -248,7 +248,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             onChange={(e) => setNewPassword(e.target.value)}
             required
             disabled={isPwLoading}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <input
             type="password"
@@ -257,12 +257,12 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             onChange={(e) => setConfirmNewPassword(e.target.value)}
             required
             disabled={isPwLoading}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={isPwLoading}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+            className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
           >
             {isPwLoading && <Loader className="h-4 w-4 animate-spin" />}
             {isPwLoading ? 'Updating...' : 'Update Password'}
@@ -273,7 +273,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
       {/* Change Email */}
       <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl">
         <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1">
-          <Mail className="h-5 w-5 text-indigo-400" />
+          <Mail className="h-5 w-5 text-accent-400" />
           Change Email Address
         </h3>
         <p className="text-xs text-slate-400 mb-1">Current: <span className="text-slate-300 font-mono">{currentEmail}</span></p>
@@ -300,7 +300,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             onChange={(e) => setNewEmail(e.target.value)}
             required
             disabled={isEmailLoading}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <input
             type="password"
@@ -309,12 +309,12 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             onChange={(e) => setCurrentPasswordForEmail(e.target.value)}
             required
             disabled={isEmailLoading}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={isEmailLoading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+            className="w-full bg-accent-600 hover:bg-accent-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
           >
             {isEmailLoading && <Loader className="h-4 w-4 animate-spin" />}
             {isEmailLoading ? 'Updating...' : 'Update Email'}
@@ -383,7 +383,7 @@ export default function AccountSettings({ currentEmail, onEmailChanged, onAccoun
             required
             maxLength={80}
             disabled={isKeyLoading}
-            className="flex-1 px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
           />
           <button
             type="submit"

@@ -29,7 +29,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
   FREE: {
     id: 'FREE', name: 'Free', tagline: 'Try a real audit', priceMonthly: 0, priceYearly: 0,
     scansPer30Days: 3, deepCrawl: false, monitors: 0, apiKeys: false, widget: false, whiteLabel: false,
-    highlights: ['3 single-page audits every 30 days', 'Full AI report and fix checklist', 'PDF and HTML download', 'SEO Scan Pro branding on reports']
+    highlights: ['3 single-page audits every 30 days', 'Full AI report and fix checklist', 'PDF and HTML download', 'SeoScan branding on reports']
   },
   STARTER: {
     id: 'STARTER', name: 'Starter', tagline: 'For freelancers and site owners', priceMonthly: 24, priceYearly: 230,

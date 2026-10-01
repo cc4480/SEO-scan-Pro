@@ -13,6 +13,7 @@ interface WhiteLabelEditorProps {
 }
 
 const colorPalettes = [
+  { name: 'SeoScan', primary: '#3aa745', accent: '#06b6d4', desc: 'The official SeoScan green and cyan' },
   { name: 'Sky Royale', primary: '#0ea5e9', accent: '#1e40af', desc: 'Enterprise clarity' },
   { name: 'Emerald Forest', primary: '#10b981', accent: '#065f46', desc: 'Sustainable organic growth' },
   { name: 'Cosmic Iris', primary: '#8b5cf6', accent: '#4c1d95', desc: 'Creative technical excellence' },
@@ -83,13 +84,13 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
     <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl">
       {settings.brandingLocked && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-          <span>White-label branding is part of the Starter plan and above. Reports currently carry SEO Scan Pro branding, and branding changes are not applied.</span>
+          <span>White-label branding is part of the Starter plan and above. Reports currently carry SeoScan branding, and branding changes are not applied.</span>
           {onUpgrade && <button type="button" onClick={onUpgrade} className="rounded-lg bg-amber-300 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-200">See plans</button>}
         </div>
       )}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-          <Palette className="text-blue-400 h-5 w-5" />
+          <Palette className="text-brand-400 h-5 w-5" />
           <span>White-Label Report Customizer</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
@@ -110,7 +111,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
               onChange={(e) => setAgencyName(e.target.value)}
               required
               placeholder="SEO Analytics Studio"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-blue-500 transition focus:outline-none"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-brand-500 transition focus:outline-none"
             />
           </div>
 
@@ -123,7 +124,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
               placeholder="https://mysite.com/logo.png"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-blue-500 transition focus:outline-none"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-brand-500 transition focus:outline-none"
             />
           </div>
         </div>
@@ -142,7 +143,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                 onClick={() => setLogoUrl(pl.url)}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer select-none ${
                   logoUrl === pl.url 
-                    ? 'bg-blue-500 text-white border-transparent shadow' 
+                    ? 'bg-brand-500 text-white border-transparent shadow' 
                     : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                 }`}
               >
@@ -166,7 +167,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                   type="button"
                   onClick={() => handlePaletteSelect(cp.primary, cp.accent)}
                   className={`p-3 rounded-xl border-2 text-left flex items-center justify-between transition cursor-pointer ${
-                    isActive ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 hover:border-white/20 bg-white/5'
+                    isActive ? 'border-brand-500 bg-brand-500/10' : 'border-white/10 hover:border-white/20 bg-white/5'
                   }`}
                 >
                   <div>
@@ -263,7 +264,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
             value={customFooter}
             onChange={(e) => setCustomFooter(e.target.value)}
             placeholder="Report generated exclusively for clients of SEO Spark Inc."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-blue-500 transition focus:outline-none"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:bg-white/10 focus:ring-2 focus:ring-brand-500 transition focus:outline-none"
           />
         </div>
 
@@ -281,7 +282,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 placeholder="https://hooks.zapier.com/hooks/catch/..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-mono focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-mono focus:bg-white/10 focus:ring-2 focus:ring-brand-500 focus:outline-none transition"
               />
               <span className="text-[9px] text-slate-500 mt-1 block">Sends Name, Email, Website & Scan score instantly.</span>
 
@@ -295,7 +296,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                     <button
                       type="button"
                       onClick={copyWebhookSecret}
-                      className="text-[9px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition"
+                      className="text-[9px] text-brand-400 hover:text-brand-300 font-bold flex items-center gap-1 cursor-pointer transition"
                     >
                       {secretCopied ? <><Check className="h-3 w-3 text-emerald-400" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
                     </button>
@@ -319,7 +320,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                   onChange={(e) => setMonitoringEmail(e.target.value)}
                   placeholder="alerts@agency.com"
                   disabled={!enableEmailAlerts}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-medium focus:bg-white/10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition disabled:opacity-50"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-xs font-medium focus:bg-white/10 focus:ring-2 focus:ring-brand-500 focus:outline-none transition disabled:opacity-50"
                 />
                 <button
                   type="button"
@@ -349,7 +350,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
                type="button"
               onClick={() => setLanguage('en')}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                language === 'en' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-white'
+                language === 'en' ? 'bg-brand-500 text-white shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               English
@@ -358,7 +359,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
               type="button"
               onClick={() => setLanguage('es')}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                language === 'es' ? 'bg-blue-500 text-white shadow' : 'text-slate-400 hover:text-white'
+                language === 'es' ? 'bg-brand-500 text-white shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               Español
@@ -370,7 +371,7 @@ export default function WhiteLabelEditor({ settings, onSaveSettings, isSaving, o
         <button
           type="submit"
           disabled={isSaving}
-          className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-sm select-none py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10 transition cursor-pointer active:scale-[0.99]"
+          className="w-full bg-gradient-to-r from-brand-500 to-accent-600 hover:from-brand-600 hover:to-accent-700 text-white font-bold text-sm select-none py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/10 transition cursor-pointer active:scale-[0.99]"
         >
           {isSaving ? 'Applying Settings...' : 'Save and Apply White-Label Settings'}
         </button>

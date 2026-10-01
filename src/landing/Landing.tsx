@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion, useScroll, useSpring } from 'motion/react';
-import { Menu, Sparkles, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
+import { BrandMark, BrandWordmark } from '../ui/BrandMark';
 import Hero from './Hero';
 import { Marquee, Stats, XRay } from './Showpieces';
 import { ScrollTrigger, scrollToId, scrollToTop, startSmoothScroll } from './motionKit';
@@ -19,10 +20,8 @@ const LINKS = [
 function Logo() {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-500 to-emerald-400 shadow-lg shadow-blue-500/25">
-        <Sparkles className="h-4 w-4 text-white" />
-      </span>
-      <span className="font-extrabold tracking-tight text-white">SEO Scan Pro</span>
+      <BrandMark size={34} />
+      <BrandWordmark className="text-lg" />
     </span>
   );
 }
@@ -68,7 +67,7 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
         <header className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${scrolled || menu ? 'border-b border-white/10 bg-slate-950/80 backdrop-blur-xl' : 'border-b border-transparent'}`}>
           <motion.div className="absolute bottom-0 left-0 h-px w-full origin-left bg-gradient-to-r from-sky-400 to-emerald-400" style={{ scaleX: progress }} aria-hidden />
           <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8" aria-label="Main">
-            <a href="/" aria-label="SEO Scan Pro home" onClick={(e) => { e.preventDefault(); scrollToTop(); }}><Logo /></a>
+            <a href="/" aria-label="SeoScan home" onClick={(e) => { e.preventDefault(); scrollToTop(); }}><Logo /></a>
             <ul className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
               {LINKS.map((l) => (
                 <li key={l.href}>
@@ -125,7 +124,7 @@ export default function Landing({ onGetStarted, onSignIn }: LandingProps) {
         <footer className="border-t border-white/10">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-10 text-sm text-slate-400 sm:flex-row sm:px-6 lg:px-8">
             <Logo />
-            <p>&copy; {new Date().getFullYear()} SEO Scan Pro. Enterprise SEO audits, in one scan.</p>
+            <p>&copy; {new Date().getFullYear()} SeoScan. Enterprise SEO audits, in one scan.</p>
             <div className="flex gap-5">
               <a href="/terms" className="hover:text-white">Terms</a>
               <a href="/privacy" className="hover:text-white">Privacy</a>

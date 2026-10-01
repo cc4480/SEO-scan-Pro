@@ -77,7 +77,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
       <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Code className="text-blue-400 h-5 w-5" />
+            <Code className="text-brand-400 h-5 w-5" />
             <span>Lead Generation Embeddable Widget</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
@@ -91,7 +91,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
             <span className="text-xs font-bold text-slate-450 uppercase tracking-wide">Embed iframe block</span>
             <button
               onClick={copyCode}
-              className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer transition"
+              className="text-xs text-brand-400 hover:text-brand-300 font-bold flex items-center gap-1 cursor-pointer transition"
             >
               {copied ? (
                 <>
@@ -109,7 +109,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
           <textarea
             readOnly
             value={embedCode}
-            className="w-full h-18 bg-black/40 text-slate-300 rounded-lg p-3 text-[10px] font-mono border border-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full h-18 bg-black/40 text-slate-300 rounded-lg p-3 text-[10px] font-mono border border-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
       </div>
@@ -128,7 +128,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
         <div className="bg-[#131d35]/60 backdrop-blur-xl max-w-lg mx-auto rounded-3xl shadow-2xl overflow-hidden border border-white/15">
           <div className="bg-gradient-to-r from-slate-900/80 to-[#1d273f]/85 px-6 py-5 text-center text-white border-b border-white/10">
             <h4 className="font-extrabold tracking-tight text-md">Free Professional SEO Appraisal</h4>
-            <p className="text-[10px] text-indigo-300 mt-1">Discover your organic traffic red flags and AI search index score in about a minute.</p>
+            <p className="text-[10px] text-accent-300 mt-1">Discover your organic traffic red flags and AI search index score in about a minute.</p>
           </div>
 
           <div className="p-6">
@@ -143,7 +143,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     disabled={isCrawlLoading}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
 
@@ -156,7 +156,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       disabled={isCrawlLoading}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
                   <div>
@@ -168,7 +168,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isCrawlLoading}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     />
                   </div>
                 </div>
@@ -176,7 +176,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                 <button
                   type="submit"
                   disabled={isCrawlLoading || !widgetKey}
-                  className="w-full bg-blue-600 hover:bg-blue-500 font-bold text-xs py-3 rounded-lg text-white shadow-md active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full bg-brand-600 hover:bg-brand-500 font-bold text-xs py-3 rounded-lg text-white shadow-md active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {isCrawlLoading ? 'Analyzing code...' : 'Instant Complete Analysis'}
                 </button>
@@ -201,14 +201,14 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                 </div>
                 <div>
                   <h5 className="font-bold text-white text-sm">Scan Complete!</h5>
-                  <p className="text-xs text-slate-400 mt-1">Audit profile generated for <span className="font-mono text-blue-400 text-[11px]">{url}</span></p>
+                  <p className="text-xs text-slate-400 mt-1">Audit profile generated for <span className="font-mono text-brand-400 text-[11px]">{url}</span></p>
                 </div>
 
                 {/* Score badge */}
                 <div className="bg-white/5 p-3 rounded-xl max-w-xs mx-auto text-center border border-white/10 flex justify-between items-center">
                   <div className="text-left select-none">
                     <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Overall Score</span>
-                    <div className="text-md font-extrabold text-blue-400">{testResult.score}/100</div>
+                    <div className="text-md font-extrabold text-brand-400">{testResult.score}/100</div>
                   </div>
                   <div className="text-right select-none">
                     <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Critical Issues</span>
@@ -216,7 +216,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-300 text-left line-clamp-3 leading-relaxed italic border-l-2 border-indigo-500/50 pl-3">
+                <p className="text-xs text-slate-300 text-left line-clamp-3 leading-relaxed italic border-l-2 border-accent-500/50 pl-3">
                   "{testResult.executiveSummary}"
                 </p>
 
@@ -224,7 +224,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                   <a
                     href={`/api/report/${testResult.scanId}/download?format=pdf`}
                     target="_blank"
-                    className="block w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-indigo-500/10"
+                    className="block w-full bg-gradient-to-r from-brand-500 to-accent-600 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-accent-500/10"
                   >
                     Download PDF Report
                   </a>
@@ -235,7 +235,7 @@ export default function WidgetEmbedBuilder({ appUrl, widgetKey }: WidgetEmbedBui
                       setEmail('');
                       setName('');
                     }}
-                    className="block w-full text-xs text-slate-450 hover:text-blue-400 font-bold transition"
+                    className="block w-full text-xs text-slate-450 hover:text-brand-400 font-bold transition"
                   >
                     Run Another Mock Client
                   </button>

@@ -4,6 +4,32 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* SeoScan palette, taken from the official logo: the green of the S (brand) and the cyan glow of
+     the shield rim (accent), on deep navy. 500/600 are kept dark enough for white button text. */
+  --color-brand-50: #f0fbec;
+  --color-brand-100: #dcf5d3;
+  --color-brand-200: #bbeaa9;
+  --color-brand-300: #94dc7c;
+  --color-brand-400: #6fcb55;
+  --color-brand-500: #2f9e44;
+  --color-brand-600: #2b8a3e;
+  --color-brand-700: #237032;
+  --color-brand-800: #1d5a2a;
+  --color-brand-900: #17481f;
+  --color-brand-950: #0c2a12;
+
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #06b6d4;
+  --color-accent-600: #0891b2;
+  --color-accent-700: #0e7490;
+  --color-accent-800: #155e75;
+  --color-accent-900: #164e63;
+  --color-accent-950: #083344;
 }
 
 /* Tailwind v4 emits modern color syntax (oklch/color-mix), which older engines drop
@@ -11,7 +37,7 @@
    looks blank. These plain-hex fallbacks keep it legible on either engine. */
 html,
 body {
-  background-color: #020617;
+  background-color: #030b18;
   color: #e2e8f0;
 }
 
@@ -41,7 +67,7 @@ body {
 }
 
 .glass-panel {
-  background-color: rgba(10, 15, 30, 0.6);
+  background-color: rgba(5, 14, 28, 0.6);
   background-image: radial-gradient(360px circle at var(--mx, -600px) var(--my, -600px), rgba(56, 189, 248, 0.10), transparent 65%);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -49,7 +75,7 @@ body {
 }
 
 .glass-nav {
-  background: rgba(10, 15, 30, 0.4);
+  background: rgba(5, 14, 28, 0.4);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -64,7 +90,7 @@ body {
 
 .glass-input:focus {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(59, 130, 246, 0.5); /* blue-500 equivalent */
+  border-color: rgba(47, 158, 68, 0.55); /* brand-500 */
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
   outline: none;
 }
@@ -167,7 +193,7 @@ body {
 
 @keyframes textShimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
 .shimmer-text {
-  background-image: linear-gradient(100deg, #38bdf8 0%, #60a5fa 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #60a5fa 85%, #38bdf8 100%);
+  background-image: linear-gradient(100deg, #38bdf8 0%, #4ade80 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #4ade80 85%, #38bdf8 100%);
   background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
   animation: textShimmer 5s linear infinite;
 }
@@ -198,7 +224,7 @@ body {
 /* The split-word masks wrap each word, and background-clip:text does not reach through wrappers,
    so the gradient must live on the words themselves as well as on the parent span. */
 .shimmer-text, .shimmer-text * {
-  background-image: linear-gradient(100deg, #38bdf8 0%, #60a5fa 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #60a5fa 85%, #38bdf8 100%);
+  background-image: linear-gradient(100deg, #38bdf8 0%, #4ade80 20%, #34d399 45%, #a7f3d0 55%, #34d399 65%, #4ade80 85%, #38bdf8 100%);
   background-size: 200% auto;
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;

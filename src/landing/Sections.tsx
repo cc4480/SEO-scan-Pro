@@ -129,7 +129,7 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
           </ul>
           <div className="mt-8"><Magnetic><button
             type="button" onClick={onGetStarted}
-            className="btn-shine group relative overflow-hidden inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-6 text-sm font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+            className="btn-shine group relative overflow-hidden inline-flex min-h-[48px] items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-accent-500 px-6 text-sm font-bold text-white shadow-lg shadow-brand-600/30 transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
           >
             Set up my agency workspace <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button></Magnetic></div>
@@ -138,7 +138,7 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
         <Reveal delay={0.15}>
           <div className="glass-panel mx-auto max-w-md rounded-3xl p-6 shadow-2xl" aria-label="Example of the embeddable audit widget" role="img">
             <div className="flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-tr from-blue-500 to-emerald-400"><Sparkles className="h-4 w-4 text-white" /></span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-tr from-brand-500 to-emerald-400"><Sparkles className="h-4 w-4 text-white" /></span>
               <div>
                 <div className="text-sm font-bold text-white">Your Agency Name</div>
                 <div className="text-[11px] text-slate-400">Free website SEO audit</div>
@@ -147,7 +147,7 @@ export function Agencies({ onGetStarted }: { onGetStarted: () => void }) {
             <div className="mt-5 space-y-3">
               <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-400">https://prospect-site.com</div>
               <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-400">name@company.com</div>
-              <div className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 px-3 py-2.5 text-center text-sm font-bold text-white">Run my free audit</div>
+              <div className="rounded-lg bg-gradient-to-r from-brand-500 to-accent-500 px-3 py-2.5 text-center text-sm font-bold text-white">Run my free audit</div>
             </div>
             <p className="mt-3 text-center text-[10px] uppercase tracking-widest text-slate-500">Example widget</p>
           </div>
@@ -212,13 +212,13 @@ export function Faq() {
 export function FinalCta({ onGetStarted }: { onGetStarted: () => void }) {
   return (
     <section className="relative py-20 sm:py-28 overflow-hidden">
-      <div className="aurora absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] rounded-full bg-blue-600/25 blur-[130px]" aria-hidden />
+      <div className="aurora absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[820px] rounded-full bg-brand-600/25 blur-[130px]" aria-hidden />
       <Reveal className="relative max-w-3xl mx-auto px-4 text-center">
         <SplitHeading as="h2" className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white text-balance">See what your site looks like to search engines and AI</SplitHeading>
         <p className="mt-5 text-lg text-slate-300">Create an account, paste a URL, and watch the audit run.</p>
         <div className="mt-9"><Magnetic><button
           type="button" onClick={onGetStarted}
-          className="btn-shine group relative overflow-hidden inline-flex min-h-[52px] items-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-8 text-base font-bold text-white shadow-lg shadow-blue-600/30 transition hover:-translate-y-0.5 hover:shadow-blue-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+          className="btn-shine group relative overflow-hidden inline-flex min-h-[52px] items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-accent-500 px-8 text-base font-bold text-white shadow-lg shadow-brand-600/30 transition hover:-translate-y-0.5 hover:shadow-brand-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
         >
           Run my first audit <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
         </button></Magnetic></div>

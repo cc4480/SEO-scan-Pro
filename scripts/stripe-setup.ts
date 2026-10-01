@@ -36,7 +36,7 @@ async function ensurePrice(plan: 'STARTER' | 'AGENCY', interval: 'month' | 'year
   // Reuse the product across a plan's two prices.
   const products = await stripe.products.search({ query: `metadata['app']:'seo-scan-pro' AND metadata['plan']:'${plan}'`, limit: 1 });
   const product = products.data[0] ?? (await stripe.products.create({
-    name: `SEO Scan Pro ${def.name}`,
+    name: `SeoScan ${def.name}`,
     description: def.tagline,
     metadata: { app: 'seo-scan-pro', plan }
   }));

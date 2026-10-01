@@ -188,10 +188,10 @@ export function createApp() {
           name: name || undefined,
           settings: {
             create: {
-              agencyName: 'SEO Scan Pro',
-              primaryColor: '#0ea5e9',
-              accentColor: '#1e40af',
-              customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
+              agencyName: 'SeoScan',
+              primaryColor: '#3aa745',
+              accentColor: '#06b6d4',
+              customFooter: 'Report provided by SeoScan • Powered by DeepSeek V4.',
               enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
               language: 'en'
             }
@@ -1137,7 +1137,7 @@ async function startServer() {
   // Windows resolves `localhost` to ::1 first, every fresh connection stalled ~2s
   // waiting for the IPv6 attempt to fail before falling back to 127.0.0.1.
   const server = app.listen(PORT, () => {
-    console.log(`SEO Scan Pro v1.1 running at http://localhost:${PORT}`);
+    console.log(`SeoScan v1.1 running at http://localhost:${PORT}`);
   });
 
   // Railway sends SIGTERM on every redeploy and gives ~10s. Stop taking traffic and new monitor
@@ -1179,7 +1179,7 @@ function escapeHtml(value: unknown): string {
 // primaryColor lands inside a style="" attribute, where escaping alone still
 // leaves CSS injection (url(...), expression breaking out of the declaration).
 // Only an actual colour value is allowed through.
-function safeColor(value: unknown, fallback = '#0ea5e9'): string {
+function safeColor(value: unknown, fallback = '#3aa745'): string {
   const v = String(value ?? '').trim();
   return /^#[0-9a-f]{3,8}$/i.test(v) || /^[a-z]{3,20}$/i.test(v) ? v : fallback;
 }
@@ -1239,7 +1239,7 @@ function generateReportHtml(scan: any, settings: any): string {
     ` : ''}
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-8 mb-8">
       <div>
-        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${safeColor(settings?.primaryColor)}">${escapeHtml(settings?.agencyName || 'SEO Scan Pro')}</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight" style="color: ${safeColor(settings?.primaryColor)}">${escapeHtml(settings?.agencyName || 'SeoScan')}</h1>
         <p class="text-slate-500 font-medium text-sm mt-1">${customTitle}</p>
       </div>
       <div class="mt-4 md:mt-0 text-left md:text-right">
@@ -1289,7 +1289,7 @@ function generateReportHtml(scan: any, settings: any): string {
     </div>
 
     <div class="border-t border-slate-100 pt-6 text-center text-xs text-slate-400">
-      <p>${escapeHtml(settings?.customFooter || 'Report provided by SEO Scan Pro')}</p>
+      <p>${escapeHtml(settings?.customFooter || 'Report provided by SeoScan')}</p>
       <button class="no-print mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm shadow inline-block transition cursor-pointer" onclick="window.print()">
         Print Report / Save to PDF
       </button>

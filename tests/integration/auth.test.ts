@@ -42,7 +42,7 @@ describe('POST /api/auth/register', () => {
       .set('Authorization', `Bearer ${res.body.token}`);
 
     expect(settingsRes.status).toBe(200);
-    expect(settingsRes.body.agencyName).toBe('SEO Scan Pro');
+    expect(settingsRes.body.agencyName).toBe('SeoScan');
 
     await cleanupUser(email);
   });

@@ -210,7 +210,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
 
       {/* WHITE LABEL REPORT ACTIONS BAR */}
       <div className="glass-card rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 to-emerald-400 opacity-80" />
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-brand-500 to-emerald-400 opacity-80" />
         <div>
           <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest bg-white/10 px-2.5 py-1 rounded">
             {isEs ? 'Auditoría White-Label Lista' : 'White-Label Audit Ready'}
@@ -227,7 +227,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             type="button"
             onClick={() => downloadReport('pdf')}
             disabled={downloading !== null}
-            className="bg-gradient-to-tr from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-blue-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
+            className="bg-gradient-to-tr from-brand-500 to-accent-600 hover:from-brand-600 hover:to-accent-700 text-white font-bold text-xs px-6 py-3.5 rounded-xl shadow-lg shadow-brand-500/20 cursor-pointer flex items-center gap-2 transition active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
           >
             <Download className="h-4 w-4" />
             <span>
@@ -255,29 +255,29 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center relative overflow-hidden flex flex-col items-center justify-center">
           <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: settings.primaryColor }} />
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Overall SEO Health</span>
-          <div className="text-4xl font-extrabold mt-2.5" style={{ color: settings.primaryColor || '#60a5fa' }}>
+          <div className="text-4xl font-extrabold mt-2.5" style={{ color: settings.primaryColor || '#6fcb55' }}>
             <AnimatedNumber value={score.overall} /><span className="text-xs font-normal text-slate-400">/100</span>
           </div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <motion.div className="h-full rounded-full" style={{ backgroundColor: settings.primaryColor || '#60a5fa' }} initial={{ width: 0 }} whileInView={{ width: `${score.overall}%` }} viewport={{ once: true }} transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
+            <motion.div className="h-full rounded-full" style={{ backgroundColor: settings.primaryColor || '#6fcb55' }} initial={{ width: 0 }} whileInView={{ width: `${score.overall}%` }} viewport={{ once: true }} transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* TECHNICAL */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Technical SEO</span>
-          <div className="text-3xl font-extrabold text-blue-400 mt-2.5"><AnimatedNumber value={score.technical} />%</div>
+          <div className="text-3xl font-extrabold text-brand-400 mt-2.5"><AnimatedNumber value={score.technical} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <motion.div className="h-full bg-blue-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.technical}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
+            <motion.div className="h-full bg-brand-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.technical}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
         {/* CONTENT */}
         <div className="glass-card rounded-2xl p-5 shadow-lg text-center flex flex-col items-center justify-center">
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Semantic / Content</span>
-          <div className="text-3xl font-extrabold text-indigo-400 mt-2.5"><AnimatedNumber value={score.content} />%</div>
+          <div className="text-3xl font-extrabold text-accent-400 mt-2.5"><AnimatedNumber value={score.content} />%</div>
           <div className="mt-1.5 h-1.5 w-16 bg-white/10 rounded-full overflow-hidden">
-            <motion.div className="h-full bg-indigo-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.content}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
+            <motion.div className="h-full bg-accent-500 rounded-full" initial={{ width: 0 }} whileInView={{ width: `${score.content}%` }} viewport={{ once: true }} transition={{ duration: 1.2, delay: 0.1, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </div>
 
@@ -311,8 +311,8 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       {/* EXECUTIVE ANALYSIS STATEMENT */}
       {settings.enabledSections.includes('executive') && (
         <div className="glass-card rounded-2xl p-6 md:p-8 shadow-lg flex flex-col md:flex-row gap-6 items-start relative overflow-hidden">
-          <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-500 opacity-60" />
-          <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+          <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-brand-500 to-accent-500 opacity-60" />
+          <div className="w-12 h-12 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 shrink-0 shadow-inner">
             <Sparkles className="h-6 w-6 animate-pulse" />
           </div>
           <div>
@@ -354,7 +354,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
           <div className="bg-white/5 border-b border-white/10 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <CheckSquare className="text-blue-400 h-4 w-4" />
+                <CheckSquare className="text-brand-400 h-4 w-4" />
                 <span>Fix Implementation Checklist</span>
               </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">Interactive tasks representing your audit recommendations list.</p>
@@ -363,7 +363,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-300">Task Completion:</span>
               <div className="relative w-28 h-4 bg-white/10 rounded-full overflow-hidden text-center text-[9px] font-black text-white flex items-center justify-center">
-                <div className="absolute inset-y-0 left-0 bg-blue-500 transition-all opacity-80" style={{ width: `${completionPercent}%` }} />
+                <div className="absolute inset-y-0 left-0 bg-brand-500 transition-all opacity-80" style={{ width: `${completionPercent}%` }} />
                 <span className="relative text-white z-10">{completionPercent}%</span>
               </div>
             </div>
@@ -384,7 +384,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer select-none ${
                     activeTab === tab.id
-                      ? 'bg-gradient-to-tr from-blue-500 to-indigo-500 text-white shadow-md'
+                      ? 'bg-gradient-to-tr from-brand-500 to-accent-500 text-white shadow-md'
                       : 'bg-white/5 text-slate-305 hover:bg-white/10'
                   }`}
                 >
@@ -442,7 +442,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
 
       {/* AGENT-READY PROMPT — hand the audit straight to a coding agent */}
       <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-400 to-blue-500 opacity-80" />
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-400 to-brand-500 opacity-80" />
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
@@ -467,7 +467,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             className={`shrink-0 font-bold text-xs px-5 py-3 rounded-xl shadow-lg cursor-pointer flex items-center gap-2 transition active:scale-[0.98] border ${
               promptCopied
                 ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300'
-                : 'bg-gradient-to-tr from-emerald-500 to-blue-600 hover:from-emerald-600 hover:to-blue-700 border-white/10 text-white shadow-emerald-500/20'
+                : 'bg-gradient-to-tr from-emerald-500 to-brand-600 hover:from-emerald-600 hover:to-brand-700 border-white/10 text-white shadow-emerald-500/20'
             }`}
           >
             {promptCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -567,7 +567,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
                     href={scan.crawlData.sitemapUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-[9px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-0.5"
+                    className="text-[9px] text-brand-400 hover:text-brand-300 hover:underline flex items-center gap-0.5"
                   >
                     <span>View XML</span>
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -585,10 +585,10 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             
             <div className="space-y-2.5">
               {/* Target root page */}
-              <div className="bg-blue-500/5 rounded-xl p-3 border border-blue-500/20">
+              <div className="bg-brand-500/5 rounded-xl p-3 border border-brand-500/20">
                 <div className="flex justify-between items-center text-xs font-bold text-white break-all">
                   <span>🏠 {scan.crawlData?.rootUrl || scan.url}</span>
-                  <span className="px-1.5 py-0.5 bg-blue-500 text-white rounded text-[9px]">Root Page</span>
+                  <span className="px-1.5 py-0.5 bg-brand-500 text-white rounded text-[9px]">Root Page</span>
                 </div>
                 <div className="flex gap-4 text-[10px] text-slate-400 font-semibold mt-1">
                   <span>H1: {scan.crawlData?.mainPage?.headings?.h1.length || 0} headings</span>
@@ -709,7 +709,7 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
       {/* AI SEARCH AEO OPTIMIZATION COMPLIANCE */}
       {settings.enabledSections.includes('aeo-geo') && (
         <div className="glass-card rounded-2xl p-6 md:p-8 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-400 to-indigo-500 opacity-60" />
+          <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-400 to-accent-500 opacity-60" />
           <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-6 border-b border-white/10">
             <div>
               <span className="text-[10px] text-amber-400 font-bold uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded">
@@ -731,15 +731,15 @@ export default function ReportDashboard({ scan, settings }: ReportDashboardProps
             {/* Left AI column review */}
             <div className="space-y-4">
               <div>
-                <span className="text-[10px] text-blue-300 font-bold uppercase tracking-wider block">Direct Answer Friendliness Assessment</span>
+                <span className="text-[10px] text-brand-300 font-bold uppercase tracking-wider block">Direct Answer Friendliness Assessment</span>
                 <p className="mt-1 text-slate-205 leading-relaxed font-semibold">{aeoAssessment.directAnswerFriendliness}</p>
               </div>
 
               <div>
-                <span className="text-[10px] text-blue-300 font-bold uppercase tracking-wider block">Rich Snippet Schema Eligibility</span>
+                <span className="text-[10px] text-brand-300 font-bold uppercase tracking-wider block">Rich Snippet Schema Eligibility</span>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {aeoAssessment.richSnippetEligibility.map((sch, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-blue-200 uppercase font-black">{sch}</span>
+                    <span key={i} className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-brand-200 uppercase font-black">{sch}</span>
                   ))}
                 </div>
               </div>

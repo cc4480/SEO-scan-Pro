@@ -120,7 +120,7 @@ export function XRay() {
 
           {/* Layer 2 — rendered page, wiped in by scroll */}
           <div ref={top} className="absolute inset-0 bg-slate-900 p-5 sm:p-7" style={{ clipPath: 'inset(0 100% 0 0)' }}>
-            <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-emerald-300">SEO Scan Pro &middot; real browser</span>
+            <span className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-emerald-300">SeoScan &middot; real browser</span>
             <div className="mt-5 space-y-3">
               <div className="h-5 w-3/4 rounded bg-white/90" />
               <div className="h-2.5 w-full rounded bg-white/20" />

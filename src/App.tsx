@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import VerifyEmailBanner from './components/VerifyEmailBanner';
 import ScanRunningPanel from './components/ScanRunningPanel';
 import AnimatedNumber from './ui/AnimatedNumber';
+import { BrandMark } from './ui/BrandMark';
 import BillingPanel from './billing/BillingPanel';
 import { fetchBilling, type BillingStatus } from './billing/billingApi';
 import LegalPage from './legal/LegalPage';
@@ -29,7 +30,7 @@ import MonitorsPanel from './components/MonitorsPanel';
 import LeadsPanel from './components/LeadsPanel';
 import { downloadWithAuth } from './download';
 import {
-  Globe, Sliders, Palette, Code, History, TrendingUp, Sparkles,
+  Globe, Sliders, Palette, Code, History, TrendingUp,
   RefreshCw, CheckCircle2, ShieldAlert, Award, FileSearch, HelpCircle, LogOut, Trash2, UserCog, CreditCard, Activity, Users, Download, Search
 } from 'lucide-react';
 
@@ -54,10 +55,10 @@ export default function App() {
   // dashboard. Keep all hooks above the early returns.
   const [scans, setScans] = useState<Scan[]>([]);
   const [settings, setSettings] = useState<WhiteLabelSettings>({
-    agencyName: 'SEO Scan Pro',
-    primaryColor: '#0ea5e9',
-    accentColor: '#1e40af',
-    customFooter: 'Report provided by SEO Scan Pro • Powered by DeepSeek V4.',
+    agencyName: 'SeoScan',
+    primaryColor: '#3aa745',
+    accentColor: '#06b6d4',
+    customFooter: 'Report provided by SeoScan • Powered by DeepSeek V4.',
     enabledSections: ['executive', 'technical', 'content', 'aeo-geo', 'checklist'],
     language: 'en'
   });
@@ -245,7 +246,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 bg-gradient-to-tr from-brand-500 to-accent-600 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-300 text-sm">Loading application...</p>
         </div>
       </div>
@@ -467,8 +468,8 @@ export default function App() {
       
       {/* BACKGROUND GLOWS (Frosted Glass Theme) */}
       <div className="absolute inset-0 z-0 opacity-30 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-blue-600 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[5%] right-[-5%] w-[40vw] h-[40vw] bg-indigo-800 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-brand-600 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[5%] right-[-5%] w-[40vw] h-[40vw] bg-accent-800 rounded-full blur-[100px]"></div>
       </div>
 
       {currentUser && currentUser.emailVerified === false && <VerifyEmailBanner email={currentUser.email} />}
@@ -477,13 +478,11 @@ export default function App() {
       <nav className="glass-nav sticky top-0 z-40 shadow-lg relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 bg-gradient-to-tr from-blue-500 to-emerald-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
-              <Sparkles className="h-5 w-5 text-white animate-pulse" />
-            </div>
+            <BrandMark size={40} />
             <div>
               <div className="font-display font-extrabold text-white tracking-tight text-md flex items-center gap-1.5">
-                <span>{settings.agencyName || 'SEO Scan Pro'}</span>
-                <span className="text-[9px] font-mono tracking-widest bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30 uppercase font-bold">V1.1</span>
+                <span>{settings.agencyName || 'SeoScan'}</span>
+                <span className="text-[9px] font-mono tracking-widest bg-brand-500/20 text-brand-300 px-1.5 py-0.5 rounded border border-brand-500/30 uppercase font-bold">V1.1</span>
               </div>
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Enterprise SEO Audit Command Center</p>
             </div>
@@ -498,7 +497,7 @@ export default function App() {
             <div className="h-6 w-px bg-white/10" />
             <div className="text-right">
               <div className="text-[9px] text-slate-400 uppercase font-black">{billing?.enabled ? 'Your Plan' : 'Active Mode'}</div>
-              <div className="text-xs font-bold text-blue-400">{billing?.enabled ? (billing.comped ? 'Agency (complimentary)' : `${billing.limits.name} plan`) : 'Enterprise Agency'}</div>
+              <div className="text-xs font-bold text-brand-400">{billing?.enabled ? (billing.comped ? 'Agency (complimentary)' : `${billing.limits.name} plan`) : 'Enterprise Agency'}</div>
             </div>
             <div className="h-6 w-px bg-white/10" />
             <button
@@ -549,14 +548,14 @@ export default function App() {
                 aria-current={isActive ? 'page' : undefined}
                 className={`relative py-3 px-4.5 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer select-none whitespace-nowrap border focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${
                   isActive
-                    ? 'text-white shadow-lg shadow-blue-500/20 border-white/20'
+                    ? 'text-white shadow-lg shadow-brand-500/20 border-white/20'
                     : 'glass-card border-transparent text-slate-400 hover:text-white glass-card-hover'
                 }`}
               >
                 {isActive && (
                   <motion.span
                     layoutId="active-tab"
-                    className="absolute inset-0 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-600"
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                   />
                 )}
@@ -611,7 +610,7 @@ export default function App() {
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         placeholder="Search by URL"
-                        className="w-full pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -653,7 +652,7 @@ export default function App() {
                             onKeyDown={(e) => { if (e.key === 'Enter') setActiveScan(s); }}
                             className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition cursor-pointer group ${
                               isCurrent
-                                ? 'border-blue-500 bg-blue-500/10 text-white'
+                                ? 'border-brand-500 bg-brand-500/10 text-white'
                                 : 'border-white/10 hover:border-white/20 bg-white/5 text-slate-300'
                             }`}
                           >

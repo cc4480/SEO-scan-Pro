@@ -93,7 +93,7 @@ describe('free plan limits (billing on)', () => {
 
     const settings = await request(app).get('/api/settings').set(auth(u.token));
     expect(settings.body.brandingLocked).toBe(true);
-    expect(settings.body.agencyName).toBe('SEO Scan Pro');
+    expect(settings.body.agencyName).toBe('SeoScan');
 
     const key = (await prisma.user.findUnique({ where: { id: u.id } }))!.widgetKey;
     const widget = await request(app).post('/api/widget/scan').send({ url: 'https://8.8.8.8', email: 'p@example.com', name: 'P', widgetKey: key });

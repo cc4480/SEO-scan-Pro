@@ -1,4 +1,4 @@
-# SEO Scan Pro — Feature Documentation
+# SeoScan — Feature Documentation
 
 An enterprise-grade, white-label SEO audit platform. It crawls a target website in a real headless browser, runs the results through the DeepSeek AI analysis engine, and produces a branded, downloadable audit report — with historical comparisons, competitor benchmarking, and an embeddable lead-capture widget for agencies.
 
@@ -216,7 +216,7 @@ While a scan runs, a **12-stage checklist** ("Live audit — what's being checke
 | `DEEPSEEK_MODEL` | — | `deepseek-chat` | Model name. |
 | `DEEPSEEK_BASE_URL` | — | `https://api.deepseek.com` | API base URL. |
 | `RESEND_API_KEY` | — | — | Resend key for reset + alert emails; unset → emails skipped. |
-| `EMAIL_FROM` | — | — | Verified Resend sender, e.g. `SEO Scan Pro <alerts@yourdomain.com>`. |
+| `EMAIL_FROM` | — | — | Verified Resend sender, e.g. `SeoScan <alerts@yourdomain.com>`. |
 | `SCAN_CONCURRENCY` | — | `2` | Scans allowed to run at once. |
 | `MAX_PENDING_SCANS` | — | `5` | Queued/running scans allowed per account. |
 | `RETURN_RESET_LINK_IN_RESPONSE` | — | *(unset)* | **Dev only** — include the reset link in API responses. |

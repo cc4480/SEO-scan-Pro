@@ -22,7 +22,7 @@ export async function issueVerificationEmail(user: { id: string; email: string }
   const link = `${appUrl}/?verifyToken=${token}`;
   await sendEmail({
     to: user.email,
-    subject: 'Confirm your SEO Scan Pro email address',
+    subject: 'Confirm your SeoScan email address',
     text: `Confirm this email address to start running scans.\n\nConfirm it here (valid for 24 hours):\n${link}\n\nIf you did not create an account, ignore this email.`,
     html: `<p>Confirm this email address to start running scans.</p><p><a href="${escapeHtml(link)}">Confirm your email</a> (valid for 24 hours).</p><p>If you did not create an account, ignore this email.</p>`
   });

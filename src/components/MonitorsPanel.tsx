@@ -147,7 +147,7 @@ export default function MonitorsPanel({ onOpenScan }: MonitorsPanelProps) {
             placeholder="example.com"
             required
             disabled={adding}
-            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
           <div className="grid grid-cols-2 gap-2">
             <label className="text-[10px] text-slate-400 font-bold uppercase">
@@ -174,7 +174,7 @@ export default function MonitorsPanel({ onOpenScan }: MonitorsPanelProps) {
           <button
             type="submit"
             disabled={adding}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+            className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
           >
             {adding ? <Loader className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {adding ? 'Adding...' : 'Start monitoring'}
@@ -202,7 +202,7 @@ export default function MonitorsPanel({ onOpenScan }: MonitorsPanelProps) {
               onClick={() => setSelectedId(m.id)}
               onKeyDown={e => { if (e.key === 'Enter') setSelectedId(m.id); }}
               className={`p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition ${
-                selectedId === m.id ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'
+                selectedId === m.id ? 'border-brand-500 bg-brand-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'
               }`}
             >
               <div className="min-w-0">
@@ -221,7 +221,7 @@ export default function MonitorsPanel({ onOpenScan }: MonitorsPanelProps) {
                   <button
                     type="button"
                     onClick={e => { e.stopPropagation(); onOpenScan(m.latestScanId as string); }}
-                    className="p-1.5 rounded-md text-slate-400 hover:text-blue-300 hover:bg-white/10 cursor-pointer"
+                    className="p-1.5 rounded-md text-slate-400 hover:text-brand-300 hover:bg-white/10 cursor-pointer"
                     title="Open latest report"
                   ><ExternalLink className="h-3.5 w-3.5" /></button>
                 )}

@@ -86,17 +86,17 @@ export default function EmbedView() {
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased flex items-center justify-center p-4">
       {/* Decorative ambient radial light */}
       <div className="absolute inset-0 z-0 opacity-15 pointer-events-none overflow-hidden">
-        <div className="absolute top-[20%] left-[20%] w-[150px] h-[150px] bg-blue-500 rounded-full blur-[60px]" />
+        <div className="absolute top-[20%] left-[20%] w-[150px] h-[150px] bg-brand-500 rounded-full blur-[60px]" />
       </div>
 
       <div className="relative w-full max-w-md z-10">
         <div className="bg-[#0f172a]/80 border border-white/10 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-6 py-5 text-center border-b border-white/10">
+          <div className="bg-gradient-to-r from-slate-900 via-accent-950 to-slate-900 px-6 py-5 text-center border-b border-white/10">
             <h4 className="font-display font-extrabold tracking-tight text-white flex items-center justify-center gap-1.5 text-sm md:text-base">
               <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
               <span>Free Professional SEO Appraisal</span>
             </h4>
-            <p className="text-[10px] text-indigo-200 mt-1 font-medium">
+            <p className="text-[10px] text-accent-200 mt-1 font-medium">
               Discover your organic traffic red flags and AI search index score in about a minute.
             </p>
           </div>
@@ -115,7 +115,7 @@ export default function EmbedView() {
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     disabled={isCrawlLoading}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500 transition"
                   />
                 </div>
 
@@ -130,7 +130,7 @@ export default function EmbedView() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       disabled={isCrawlLoading}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500 transition"
                     />
                   </div>
                   <div>
@@ -144,7 +144,7 @@ export default function EmbedView() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isCrawlLoading}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-xs text-white placeholder-slate-500 font-medium focus:bg-white/10 focus:outline-none focus:ring-1 focus:ring-brand-500 transition"
                     />
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export default function EmbedView() {
                 <button
                   type="submit"
                   disabled={isCrawlLoading || !url.trim()}
-                  className="w-full bg-blue-600 hover:bg-blue-500 font-bold text-xs py-3 rounded-lg text-white shadow-lg active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full bg-brand-600 hover:bg-brand-500 font-bold text-xs py-3 rounded-lg text-white shadow-lg active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isCrawlLoading ? (
                     <>
@@ -182,7 +182,7 @@ export default function EmbedView() {
                 <div>
                   <h5 className="font-bold text-white text-sm">Scan Complete!</h5>
                   <p className="text-xs text-slate-400 mt-1">
-                    Audit profile generated for <span className="font-mono text-blue-400 text-[11px] font-semibold">{url}</span>
+                    Audit profile generated for <span className="font-mono text-brand-400 text-[11px] font-semibold">{url}</span>
                   </p>
                 </div>
 
@@ -190,7 +190,7 @@ export default function EmbedView() {
                 <div className="bg-white/5 p-3 rounded-xl max-w-xs mx-auto text-center border border-white/10 flex justify-between items-center gap-4">
                   <div className="text-left select-none">
                     <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider">Overall Score</span>
-                    <div className="text-sm font-black text-blue-400 leading-none mt-1">{testResult.score}/100</div>
+                    <div className="text-sm font-black text-brand-400 leading-none mt-1">{testResult.score}/100</div>
                   </div>
                   <div className="text-right select-none">
                     <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider">Critical Issues</span>
@@ -210,7 +210,7 @@ export default function EmbedView() {
                     href={`/api/report/${testResult.scanId}/download?format=pdf`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-indigo-500/10"
+                    className="block w-full bg-gradient-to-r from-brand-500 to-accent-600 hover:from-brand-600 hover:to-accent-700 text-white font-bold text-xs py-2.5 rounded-lg active:scale-[0.98] transition shadow-lg shadow-accent-500/10"
                   >
                     Download PDF Report
                   </a>
@@ -221,7 +221,7 @@ export default function EmbedView() {
                       setEmail('');
                       setName('');
                     }}
-                    className="block w-full text-xs text-slate-450 hover:text-blue-400 font-bold transition cursor-pointer select-none"
+                    className="block w-full text-xs text-slate-450 hover:text-brand-400 font-bold transition cursor-pointer select-none"
                   >
                     Run Another Analysis
                   </button>

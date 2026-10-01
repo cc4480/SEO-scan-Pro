@@ -105,7 +105,7 @@ export default function AppMotion() {
   if (still) return null;
   return (
     <div id="app-backdrop" aria-hidden className="fixed inset-0 z-0 pointer-events-none" style={{ display: onLanding ? 'none' : 'block' }}>
-      <div className="aurora absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-blue-600/15 blur-[140px]" />
+      <div className="aurora absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-brand-600/15 blur-[140px]" />
       <div className="aurora-2 absolute bottom-0 -right-40 h-[420px] w-[420px] rounded-full bg-emerald-500/10 blur-[120px]" />
       <ParticleField className="opacity-45" density={0.55} />
     </div>

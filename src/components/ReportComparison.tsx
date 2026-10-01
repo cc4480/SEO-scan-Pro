@@ -118,7 +118,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
           <select
             value={baseScan.id}
             onChange={(e) => onSelectCompareScan(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-205 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-205 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
           >
             {eligibleScans.map(s => (
               <option key={s.id} value={s.id} className="bg-slate-900 text-white">
@@ -179,7 +179,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
               <span className="text-[11px]">{item.label}</span>
               <span className="text-[10px] flex gap-2">
                 <span className="text-slate-400">Previous: {item.base}</span>
-                <span className="text-blue-400">Current: {item.cur}</span>
+                <span className="text-brand-400">Current: {item.cur}</span>
               </span>
             </div>
             
@@ -191,7 +191,7 @@ export default function ReportComparison({ currentScan, historyScans, onSelectCo
               />
               <div 
                 className={`absolute inset-y-0 left-0 rounded-full transition-all ${
-                  item.cur >= item.base ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-red-500'
+                  item.cur >= item.base ? 'bg-gradient-to-r from-brand-500 to-accent-500' : 'bg-red-500'
                 }`}
                 style={{ width: `${item.cur}%`, opacity: 0.8 }}
               />

@@ -1,11 +1,11 @@
 {
-  "name": "SEO Scan Pro",
-  "short_name": "SEO Scan Pro",
+  "name": "SeoScan",
+  "short_name": "SeoScan",
   "description": "White-label SEO and AI-search (AEO/GEO) audit platform.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#020617",
+  "background_color": "#030b18",
+  "theme_color": "#030b18",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },

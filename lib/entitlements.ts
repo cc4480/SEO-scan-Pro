@@ -75,5 +75,5 @@ export function denyScanQuota(ent: Entitlement, usedInWindow: number): PlanDenia
 /** Report branding: paid white-label plans use the account's saved branding, everyone else gets ours. */
 export function brandedSettings<T extends Record<string, any>>(settings: T, ent: Entitlement): T {
   if (!ent.enforced || ent.def.whiteLabel) return settings;
-  return { ...settings, agencyName: 'SEO Scan Pro', logoUrl: null, primaryColor: '#0ea5e9', accentColor: '#1e40af', customFooter: 'Report provided by SEO Scan Pro' };
+  return { ...settings, agencyName: 'SeoScan', logoUrl: null, primaryColor: '#3aa745', accentColor: '#06b6d4', customFooter: 'Report provided by SeoScan' };
 }

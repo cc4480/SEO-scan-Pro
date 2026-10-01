@@ -15,13 +15,13 @@ const UPDATED = 'September 30, 2026';
 
 export const TERMS: LegalDoc = {
   title: 'Terms of Service',
-  summary: 'The rules for using SEO Scan Pro. Short version: audit sites you are allowed to audit, do not abuse the service, and treat AI-written findings as guidance, not guarantees.',
+  summary: 'The rules for using SeoScan. Short version: audit sites you are allowed to audit, do not abuse the service, and treat AI-written findings as guidance, not guarantees.',
   updated: UPDATED,
   sections: [
     {
       heading: '1. Agreement',
       body: [
-        'By creating an account or using SEO Scan Pro (the “Service”), you agree to these Terms and to our Privacy Policy. If you use the Service on behalf of a company or client, you confirm you are authorised to accept these Terms for them.'
+        'By creating an account or using SeoScan (the “Service”), you agree to these Terms and to our Privacy Policy. If you use the Service on behalf of a company or client, you confirm you are authorised to accept these Terms for them.'
       ]
     },
     {
@@ -94,7 +94,7 @@ export const TERMS: LegalDoc = {
 
 export const PRIVACY: LegalDoc = {
   title: 'Privacy Policy',
-  summary: 'What SEO Scan Pro collects, who else handles it, and how you can see or delete it. We do not sell your data and we do not use advertising or analytics trackers.',
+  summary: 'What SeoScan collects, who else handles it, and how you can see or delete it. We do not sell your data and we do not use advertising or analytics trackers.',
   updated: UPDATED,
   sections: [
     {

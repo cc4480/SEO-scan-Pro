@@ -1,4 +1,4 @@
-# SEO Scan Pro — production image. Chromium is installed from apt (with every shared library it
+# SeoScan — production image. Chromium is installed from apt (with every shared library it
 # needs) instead of letting Puppeteer download one, which fails at runtime on a slim base image.
 FROM node:22-bookworm-slim
 

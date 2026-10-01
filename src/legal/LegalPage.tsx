@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { BrandMark, BrandWordmark } from '../ui/BrandMark';
 import { PRIVACY, TERMS, type LegalDoc } from './content';
 
 export type LegalKind = 'terms' | 'privacy';
@@ -21,7 +22,7 @@ export default function LegalPage({ kind }: { kind: LegalKind }) {
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = `${doc.title} | SEO Scan Pro`;
+    document.title = `${doc.title} | SeoScan`;
     window.scrollTo(0, 0);
     fetch('/api/public-config').then((r) => (r.ok ? r.json() : null)).then((c) => setEmail(c?.supportEmail ?? null)).catch(() => {});
   }, [doc.title]);
@@ -30,11 +31,9 @@ export default function LegalPage({ kind }: { kind: LegalKind }) {
     <div className="min-h-screen text-slate-200">
       <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <a href="/" className="flex items-center gap-2.5" aria-label="SEO Scan Pro home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-500 to-emerald-400">
-              <Sparkles className="h-4 w-4 text-white" />
-            </span>
-            <span className="font-extrabold tracking-tight text-white">SEO Scan Pro</span>
+          <a href="/" className="flex items-center gap-2.5" aria-label="SeoScan home">
+            <BrandMark size={34} />
+            <BrandWordmark className="text-lg" />
           </a>
           <a href="/" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5 hover:text-white">
             <ArrowLeft className="h-4 w-4" /> Back

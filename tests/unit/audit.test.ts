@@ -446,7 +446,7 @@ describe('measurement details', () => {
   });
 });
 
-describe('found by auditing SEO Scan Pro with itself', () => {
+describe('found by auditing SeoScan with itself', () => {
   it('does not count headings inside <noscript> as part of the page', async () => {
     const { parsePage } = await import('../../lib/crawler');
     const html = '<html><head><title>T</title></head><body><div id="root"><h1>Real heading</h1></div><noscript><h1>Fallback heading</h1><a href="/x">x</a></noscript></body></html>';

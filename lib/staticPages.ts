@@ -15,7 +15,7 @@ export const STAGE_LABELS = [
   'Structured data (JSON-LD)', 'Security headers & HTTPS', 'Performance, TTFB & vitals', 'DeepSeek analysis', 'Agent-ready prompt'
 ];
 
-const NAV = `<nav aria-label="Main"><a href="/">SEO Scan Pro</a> <a href="/signup">Create account</a> <a href="/login">Sign in</a> <a href="/terms">Terms</a> <a href="/privacy">Privacy</a></nav>`;
+const NAV = `<nav aria-label="Main"><a href="/">SeoScan</a> <a href="/signup">Create account</a> <a href="/login">Sign in</a> <a href="/terms">Terms</a> <a href="/privacy">Privacy</a></nav>`;
 const FOOT = `<footer><a href="/terms">Terms of Service</a> <a href="/privacy">Privacy Policy</a> <a href="/signup">Create an account</a></footer>`;
 
 const FEATURES: Array<[string, string]> = [
@@ -50,7 +50,7 @@ function home(): string {
   }).join('');
   return `<header>${NAV}</header><main>
 <h1>Find out why your site isn’t ranking in Google or AI search.</h1>
-<p>SEO Scan Pro loads your site in a real browser, runs 13 audit stages across technical SEO, content, AI-answer readiness, security and speed, then hands you a branded report and a ready-made prompt for your coding agent.</p>
+<p>SeoScan loads your site in a real browser, runs 13 audit stages across technical SEO, content, AI-answer readiness, security and speed, then hands you a branded report and a ready-made prompt for your coding agent.</p>
 <p><a href="/signup">Run my first audit</a> <a href="/login">Sign in</a></p>
 <h2>What every audit checks</h2><ol>${STAGE_LABELS.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
 <h2>How it works</h2><ol>${STEPS.map(([t, d]) => `<li><strong>${esc(t)}.</strong> ${esc(d)}</li>`).join('')}</ol>

@@ -76,7 +76,7 @@ export default function HeroDemo() {
       >
         <motion.div
           style={{ rotateX: rx, rotateY: ry, transformStyle: 'preserve-3d' }}
-          className="glass-panel relative overflow-hidden rounded-3xl p-5 shadow-2xl shadow-blue-950/60"
+          className="glass-panel relative overflow-hidden rounded-3xl p-5 shadow-2xl shadow-brand-950/60"
         >
           <motion.div className="pointer-events-none absolute inset-0 z-20" style={{ background: glare }} aria-hidden />
           {scanning && (
@@ -102,7 +102,7 @@ export default function HeroDemo() {
             <motion.span
               animate={phase === 'typing' && typed.length === URL_TEXT.length ? { scale: [1, 1.12, 1] } : { scale: 1 }}
               transition={{ duration: 0.5 }}
-              className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 px-3 py-1 text-[11px] font-bold text-white"
+              className="rounded-lg bg-gradient-to-r from-brand-500 to-accent-500 px-3 py-1 text-[11px] font-bold text-white"
             >
               Scan
             </motion.span>

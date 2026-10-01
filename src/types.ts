@@ -337,8 +337,8 @@ export interface DeepSeekSeoReport {
 export interface WhiteLabelSettings {
   logoUrl?: string;
   agencyName?: string;
-  primaryColor: string; // e.g. "#0ea5e9"
-  accentColor: string;  // e.g. "#1e40af"
+  primaryColor: string; // e.g. "#3aa745"
+  accentColor: string;  // e.g. "#06b6d4"
   customFooter: string;
   enabledSections: string[]; // e.g., ["executive", "technical", "content", "aeo-geo", "checklist"]
   language: 'en' | 'es';

@@ -113,11 +113,11 @@ model Scan {
 
 model WhiteLabelSettings {
   id        String   @id @default(cuid())
-  agencyName String  @default("SEO Scan Elite")
+  agencyName String  @default("SeoScan")
   logoUrl   String?
-  primaryColor String @default("#0ea5e9")
-  accentColor String @default("#1e40af")
-  customFooter String @default("Report provided by SEO Scan Pro • Powered by DeepSeek V4.")
+  primaryColor String @default("#3aa745")
+  accentColor String @default("#06b6d4")
+  customFooter String @default("Report provided by SeoScan • Powered by DeepSeek V4.")
   enabledSections String[] @default(["executive", "technical", "content", "aeo-geo", "checklist"])
   language  String  @default("en") // en | es
   webhookUrl String?

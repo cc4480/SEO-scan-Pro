@@ -40,7 +40,7 @@ export default function ForgotPasswordForm({ onSwitchToLogin }: ForgotPasswordFo
 
   return (
     <div className="relative overflow-hidden min-h-screen bg-gradient-to-br from-slate-950/50 to-slate-900/30 flex items-center justify-center p-4">
-      <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[800px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+      <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[800px] -translate-x-1/2 rounded-full bg-brand-600/20 blur-[120px]" />
       <div className="relative w-full max-w-md" data-stagger>
         <div className="text-center mb-8">
           <div className="logo-glow w-16 h-16 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -70,7 +70,7 @@ export default function ForgotPasswordForm({ onSwitchToLogin }: ForgotPasswordFo
                   </p>
                   <a
                     href={devResetLink}
-                    className="block text-xs text-blue-400 hover:text-blue-300 break-all font-mono underline"
+                    className="block text-xs text-brand-400 hover:text-brand-300 break-all font-mono underline"
                   >
                     {devResetLink}
                   </a>
@@ -108,7 +108,7 @@ export default function ForgotPasswordForm({ onSwitchToLogin }: ForgotPasswordFo
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isLoading}
                       required
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition disabled:opacity-50"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -126,7 +126,7 @@ export default function ForgotPasswordForm({ onSwitchToLogin }: ForgotPasswordFo
               <div className="mt-6 text-center">
                 <button
                   onClick={onSwitchToLogin}
-                  className="text-blue-400 hover:text-blue-300 font-semibold text-sm transition inline-flex items-center gap-1"
+                  className="text-brand-400 hover:text-brand-300 font-semibold text-sm transition inline-flex items-center gap-1"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to Sign In

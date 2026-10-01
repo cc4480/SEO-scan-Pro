@@ -21,11 +21,16 @@ export default function Hero({ onGetStarted, onSeeHow }: { onGetStarted: () => v
     <section ref={ref} onMouseMove={onMove} className="hero-light relative overflow-hidden pt-28 sm:pt-36 pb-24 sm:pb-32 min-h-[92vh]">
       <div className="landing-grid absolute inset-0" aria-hidden />
       <ParticleField className="opacity-80" />
-      <div className="aurora absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-blue-600/25 blur-[140px]" aria-hidden />
+      <div className="aurora absolute -top-40 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-brand-600/25 blur-[140px]" aria-hidden />
       <div className="aurora-2 absolute top-40 -right-40 h-[420px] w-[420px] rounded-full bg-emerald-500/15 blur-[120px]" aria-hidden />
 
       <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
         <div>
+          <motion.img
+            src="/logo.jpg" alt="SeoScan shield logo" width={104} height={116}
+            initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
+            className="mb-6 h-[116px] w-[104px] rounded-2xl object-cover shadow-[0_0_44px_rgba(56,189,248,0.35)] ring-1 ring-accent-300/30"
+          />
           <motion.p
             initial={{ opacity: 0, y: 12, filter: 'blur(6px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: 0.7, ease: EASE }}
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-200 backdrop-blur"
@@ -42,7 +47,7 @@ export default function Hero({ onGetStarted, onSeeHow }: { onGetStarted: () => v
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.9, ease: EASE }}
             className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300"
           >
-            SEO Scan Pro loads your site in a real browser, runs 13 audit stages across technical SEO, content, AI-answer readiness,
+            SeoScan loads your site in a real browser, runs 13 audit stages across technical SEO, content, AI-answer readiness,
             security and speed, then hands you a branded report and a ready-made prompt for your coding agent.
           </motion.p>
 
@@ -53,7 +58,7 @@ export default function Hero({ onGetStarted, onSeeHow }: { onGetStarted: () => v
             <Magnetic>
               <button
                 type="button" onClick={onGetStarted}
-                className="btn-shine group relative inline-flex min-h-[52px] items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 px-7 text-sm font-bold text-white shadow-lg shadow-blue-600/40 transition-shadow hover:shadow-blue-500/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+                className="btn-shine group relative inline-flex min-h-[52px] items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-brand-500 to-accent-500 px-7 text-sm font-bold text-white shadow-lg shadow-brand-600/40 transition-shadow hover:shadow-brand-500/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
               >
                 Run my first audit
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />

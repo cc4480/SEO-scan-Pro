@@ -82,10 +82,10 @@ export default function CompetitorBenchmark() {
     <div className="space-y-8 animate-fadeIn">
       {/* Editorial Header */}
       <div className="glass-card rounded-2xl p-6 md:p-8 relative overflow-hidden">
-        <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-blue-600/5 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-brand-600/5 rounded-full blur-[80px] pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <span className="text-[10px] text-blue-400 font-extrabold uppercase tracking-widest bg-blue-500/10 px-2.5 py-1 rounded inline-block">
+            <span className="text-[10px] text-brand-400 font-extrabold uppercase tracking-widest bg-brand-500/10 px-2.5 py-1 rounded inline-block">
               Niche Market Analysis
             </span>
             <h2 className="text-xl font-bold tracking-tight text-white mt-3">
@@ -125,7 +125,7 @@ export default function CompetitorBenchmark() {
         {/* Bento Card 2 */}
         <div className="glass-card rounded-2xl p-6 border border-white/10 relative overflow-hidden flex flex-col justify-between">
           <div className="space-y-2">
-            <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center mb-4">
+            <div className="w-10 h-10 bg-brand-500/10 border border-brand-500/20 text-brand-400 rounded-lg flex items-center justify-center mb-4">
               <Zap className="h-5 w-5" />
             </div>
             <h3 className="font-extrabold text-slate-200 text-sm">Real-time Webhook lead pushes</h3>
@@ -133,13 +133,13 @@ export default function CompetitorBenchmark() {
               Capture leads dynamically using our customizable modal widget on your site. Trigger live webhooks instant posting client SEO inputs into HubSpot or Slack channels. Perfect for cold outreach conversion.
             </p>
           </div>
-          <span className="text-[10px] text-blue-300 font-bold tracking-wide mt-4 block">100% PRODUCTION INTEGRATION READY</span>
+          <span className="text-[10px] text-brand-300 font-bold tracking-wide mt-4 block">100% PRODUCTION INTEGRATION READY</span>
         </div>
 
         {/* Bento Card 3 */}
         <div className="glass-card rounded-2xl p-6 border border-white/10 relative overflow-hidden flex flex-col justify-between">
           <div className="space-y-2">
-            <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-lg flex items-center justify-center mb-4">
+            <div className="w-10 h-10 bg-accent-500/10 border border-accent-500/20 text-accent-400 rounded-lg flex items-center justify-center mb-4">
               <TrendingUp className="h-5 w-5" />
             </div>
             <h3 className="font-extrabold text-slate-200 text-sm">Chronological Progress Deltas</h3>
@@ -147,7 +147,7 @@ export default function CompetitorBenchmark() {
               Run comparative maps showcasing how a target site’s seo health, sizes, and error stats improve over time. Prove direct consulting ROI to prospects in seconds with side-by-side delta matrices.
             </p>
           </div>
-          <span className="text-[10px] text-indigo-300 font-bold tracking-wide mt-4 block">LEGACY COMPETITORS LACK INTERACTIVE DELTAS</span>
+          <span className="text-[10px] text-accent-300 font-bold tracking-wide mt-4 block">LEGACY COMPETITORS LACK INTERACTIVE DELTAS</span>
         </div>
 
       </div>
@@ -157,7 +157,7 @@ export default function CompetitorBenchmark() {
         <div className="bg-white/5 border-b border-white/10 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <Award className="text-blue-400 h-4 w-4" />
+              <Award className="text-brand-400 h-4 w-4" />
               <span>Diagnostic Comparison Matrix</span>
             </h3>
             <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Side-by-side spec layout outlining our edge over major SEO software brands.</p>
@@ -175,7 +175,7 @@ export default function CompetitorBenchmark() {
                 onClick={() => setActiveFilter(f.id as any)}
                 className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition cursor-pointer select-none whitespace-nowrap ${
                   activeFilter === f.id
-                    ? 'bg-blue-600 text-white shadow'
+                    ? 'bg-brand-600 text-white shadow'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -206,7 +206,7 @@ export default function CompetitorBenchmark() {
                   </td>
                   
                   {/* Our App Column */}
-                  <td className="p-4 text-center bg-blue-500/10">
+                  <td className="p-4 text-center bg-brand-500/10">
                     <div className="inline-flex flex-col items-center">
                       <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                         <Check className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function CompetitorBenchmark() {
                   <td className="p-4 text-center">
                     <div className="inline-flex flex-col items-center">
                       {spec.seoptimer.ok ? (
-                        <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                        <div className="w-5 h-5 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center">
                           <Check className="h-3 w-3" />
                         </div>
                       ) : (
@@ -235,7 +235,7 @@ export default function CompetitorBenchmark() {
                   <td className="p-4 text-center">
                     <div className="inline-flex flex-col items-center">
                       {spec.woorank.ok ? (
-                        <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                        <div className="w-5 h-5 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center">
                           <Check className="h-3 w-3" />
                         </div>
                       ) : (
@@ -251,7 +251,7 @@ export default function CompetitorBenchmark() {
                   <td className="p-4 text-center">
                     <div className="inline-flex flex-col items-center">
                       {spec.sitechecker.ok ? (
-                        <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                        <div className="w-5 h-5 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center">
                           <Check className="h-3 w-3" />
                         </div>
                       ) : (
@@ -270,8 +270,8 @@ export default function CompetitorBenchmark() {
       </div>
 
       {/* Strategic Vision check info */}
-      <div className="bg-gradient-to-r from-blue-950/40 via-[#182a4d]/50 to-indigo-950/40 border border-white/10 p-6 rounded-2xl flex items-start gap-4 shadow-lg text-xs">
-        <div className="p-2 bg-blue-500/15 border border-blue-500/30 text-blue-400 rounded-lg shrink-0">
+      <div className="bg-gradient-to-r from-brand-950/40 via-[#182a4d]/50 to-accent-950/40 border border-white/10 p-6 rounded-2xl flex items-start gap-4 shadow-lg text-xs">
+        <div className="p-2 bg-brand-500/15 border border-brand-500/30 text-brand-400 rounded-lg shrink-0">
           <HelpCircle className="h-5 w-5" />
         </div>
         <div>

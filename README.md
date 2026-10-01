@@ -1,4 +1,4 @@
-# SEO Scan Pro
+# SeoScan
 
 An enterprise-grade, white-label SEO audit platform. Crawls a target site, runs the results through an AI (DeepSeek) SEO/AEO/GEO analysis engine, and produces a branded, downloadable audit report — with historical comparisons, competitor benchmarking, and an embeddable lead-capture widget for agencies.
 

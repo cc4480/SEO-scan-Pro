@@ -1,7 +1,7 @@
 // SSRF guard — every outbound request this server makes on a user's behalf goes
 // through here.
 //
-// Why this exists: SEO Scan Pro fetches URLs it does not choose. A user (or,
+// Why this exists: SeoScan fetches URLs it does not choose. A user (or,
 // via /api/widget/scan, anyone on the internet with no account) names the
 // target; the target's robots.txt names the sitemap; the target's HTML names
 // the subpages; the user's settings name the webhook. Without a guard, each of

@@ -31,7 +31,7 @@ export function IntervalToggle({ interval, onChange }: { interval: BillingInterv
             className={`relative z-10 min-h-[40px] rounded-full px-5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 ${interval === o.id ? 'text-white' : 'text-slate-400 hover:text-white'}`}
           >
             {interval === o.id && (
-              <motion.span layoutId="interval-pill" className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />
+              <motion.span layoutId="interval-pill" className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-brand-500 to-accent-500" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />
             )}
             {o.label}
           </button>
@@ -57,7 +57,7 @@ export default function PlanCards({ interval, onIntervalChange, ctas, current }:
           return (
             <div
               key={id}
-              className={`relative flex flex-col rounded-3xl border p-7 transition ${featured ? 'border-sky-400/40 bg-gradient-to-b from-sky-400/[0.08] to-transparent shadow-xl shadow-blue-950/40' : 'border-white/10 bg-white/[0.04]'} ${current === id ? 'ring-2 ring-emerald-400/60' : ''}`}
+              className={`relative flex flex-col rounded-3xl border p-7 transition ${featured ? 'border-sky-400/40 bg-gradient-to-b from-sky-400/[0.08] to-transparent shadow-xl shadow-brand-950/40' : 'border-white/10 bg-white/[0.04]'} ${current === id ? 'ring-2 ring-emerald-400/60' : ''}`}
             >
               {current === id && <span className="absolute -top-3 left-7 rounded-full bg-emerald-400 px-3 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-950">Your plan</span>}
               <h3 className="text-lg font-bold text-white">{plan.name}</h3>
@@ -76,7 +76,7 @@ export default function PlanCards({ interval, onIntervalChange, ctas, current }:
               </ul>
               <button
                 type="button" onClick={cta.onClick} disabled={cta.disabled}
-                className={`mt-8 min-h-[48px] w-full rounded-xl text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-600/30' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'}`}
+                className={`mt-8 min-h-[48px] w-full rounded-xl text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:cursor-not-allowed disabled:opacity-60 ${featured ? 'bg-gradient-to-r from-brand-500 to-accent-500 text-white shadow-lg shadow-brand-600/30' : 'border border-white/15 bg-white/5 text-white hover:bg-white/10'}`}
               >
                 {cta.label}
               </button>
