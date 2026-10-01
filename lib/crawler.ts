@@ -74,7 +74,12 @@ async function renderPage(url: string, timeoutMs: number, emit: Emit = noopEmit,
         emit('render', 'info', `main document answered HTTP ${r.status()} after ${Date.now() - startTime}ms`);
       }
     });
-    page.on('domcontentloaded', () => emit('render', 'info', `DOMContentLoaded after ${Date.now() - startTime}ms`));
+    // A heavy site can answer and build its DOM yet never fire `load` inside the timeout (Nike). The
+    // parsed DOM is then real content, so it counts as loaded for the "analyse what we have" fallback.
+    page.on('domcontentloaded', () => {
+      pageLoaded = true;
+      emit('render', 'info', `DOMContentLoaded after ${Date.now() - startTime}ms`);
+    });
     page.on('load', () => {
       pageLoaded = true;
       emit('render', 'info', `load event after ${Date.now() - startTime}ms`);
