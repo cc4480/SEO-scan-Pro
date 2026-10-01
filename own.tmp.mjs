@@ -1,0 +1,27 @@
+const base = 'http://localhost:3100';
+const J = { 'Content-Type': 'application/json' };
+const creds = { email: 'self-audit@example.com', password: 'selfaudit-pw1' };
+let d = await (await fetch(base + '/api/auth/register', { method: 'POST', headers: J, body: JSON.stringify(creds) })).json();
+if (!d.token) d = await (await fetch(base + '/api/auth/login', { method: 'POST', headers: J, body: JSON.stringify(creds) })).json();
+const A = { ...J, Authorization: `Bearer ${d.token}` };
+const url = 'https://web-production-b7f5d.up.railway.app';
+const t0 = Date.now();
+const s = await (await fetch(base + '/api/scan', { method: 'POST', headers: A, body: JSON.stringify({ url, mode: 'SINGLE', depth: 1 }) })).json();
+let g;
+for (let i = 0; i < 100; i++) { await new Promise(r => setTimeout(r, 1500)); g = await (await fetch(`${base}/api/scans/${s.id}`, { headers: A })).json(); if (g.status !== 'PENDING') break; }
+const r = g.seoReport, f = g.crawlData.facts || {}, pg = g.crawlData.mainPage;
+console.log('STATUS', g.status, Math.round((Date.now() - t0) / 1000) + 's', '| scoreMethod:', r.scoreMethod);
+console.log('SCORES', JSON.stringify(r.score));
+console.log('PAGE  title:', JSON.stringify(pg.meta.title), '| desc:', pg.meta.description ? 'yes' : 'NO', '| canonical:', pg.meta.canonical, '| h1:', pg.headings.h1.length, 'h2:', pg.headings.h2.length, '| words:', pg.wordCount, '| images:', pg.images.total);
+console.log('RAW vs RENDERED', JSON.stringify(f.rawVsRendered));
+console.log('BOTS blocked:', (f.botAccess?.results || []).filter(b => b.blocked).map(b => b.name).join(', ') || 'none');
+console.log('SCHEMA types:', [...new Set((f.schema?.entities || []).map(e => e.type))].join(', '), '| invisible:', JSON.stringify(f.schema?.invisible));
+console.log('SIGNALS', JSON.stringify(f.signals));
+console.log('SEC headers', JSON.stringify(g.crawlData.securityHeaders), '| sitemap:', g.crawlData.sitemapFound, '| llms.txt:', g.crawlData.llmsTxtFound);
+console.log('--- SCORE BREAKDOWN');
+for (const k of ['technical','content','aeoGeo','performance']) console.log(' ', k, r.score[k], '=>', (r.scoreBreakdown[k] || []).map(x => `-${x.points} ${x.reason}`).join(' | ') || 'no deductions');
+console.log('--- REMOVED (' + (r.qa?.removed.length || 0) + ')'); (r.qa?.removed || []).forEach(x => console.log(' -', x.title.slice(0, 70), '=>', x.reason.slice(0, 90)));
+console.log('--- ADDED:', (r.qa?.added || []).join('; ') || 'none');
+console.log('--- FIXES'); r.recommendedFixes.forEach(x => console.log(` [${x.priority}] ${x.title}`));
+console.log('--- CRITICAL'); r.criticalIssues.forEach(x => console.log(' -', x.slice(0, 160)));
+console.log('--- SUMMARY:', r.executiveSummary.slice(0, 500));

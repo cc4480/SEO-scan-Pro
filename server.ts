@@ -24,6 +24,7 @@ import { renderHtmlToPdf } from './lib/pdf';
 import { dailyScanLimit, scansInLast24h } from './lib/dailyQuota';
 import { loadIndexTemplate, renderIndex, INDEXABLE_PATHS } from './lib/indexHtml';
 import { contentSecurityPolicy } from './lib/csp';
+import { staticContentFor } from './lib/staticPages';
 import { evidenceSectionHtml } from './lib/reportEvidence';
 import { mountBillingRoutes, mountStripeWebhook } from './lib/billingRoutes';
 import { billingEnabled, cancelSubscriptionNow } from './lib/billing';
@@ -1111,7 +1112,7 @@ async function startServer() {
     const indexTemplate = loadIndexTemplate(distPath);
     const sendIndex = (req: express.Request, res: express.Response) => {
       res.setHeader('Cache-Control', 'no-store');
-      res.type('html').send(renderIndex(indexTemplate, process.env.APP_URL || `http://localhost:${PORT}`, req.path));
+      res.type('html').send(renderIndex(indexTemplate, process.env.APP_URL || `http://localhost:${PORT}`, req.path, staticContentFor(req.path)));
     };
     // App shell responses (HTML, static files) get a CSP; the JSON API and report downloads do not.
     app.use((req, res, next) => {

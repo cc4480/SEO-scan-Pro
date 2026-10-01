@@ -445,3 +445,18 @@ describe('measurement details', () => {
     expect(inv[0].items).toEqual(['Teleport the database to mars']);
   });
 });
+
+describe('found by auditing SEO Scan Pro with itself', () => {
+  it('does not count headings inside <noscript> as part of the page', async () => {
+    const { parsePage } = await import('../../lib/crawler');
+    const html = '<html><head><title>T</title></head><body><div id="root"><h1>Real heading</h1></div><noscript><h1>Fallback heading</h1><a href="/x">x</a></noscript></body></html>';
+    const page = parsePage('https://x.test/', html, 100);
+    expect(page.headings.h1).toEqual(['Real heading']);
+  });
+
+  it('recognises a "How it works" navigation link as that section existing', () => {
+    const html = '<nav><a href="#features">Features</a><a href="#how">How it works</a></nav><h2>Thirteen stages. Every one visible.</h2>';
+    expect(contentSignals(html, '', 0).sections.howItWorks).toBe(true);
+    expect(contentSignals('<nav><a href="#features">Features</a></nav><h2>Pricing</h2>', '', 0).sections.howItWorks).toBe(false);
+  });
+});

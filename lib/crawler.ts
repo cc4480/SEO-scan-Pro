@@ -220,6 +220,9 @@ function cleanText(html: string): string {
 }
 
 export function parsePage(url: string, html: string, loadTimeMs: number, ttfbMs?: number): CrawlPageData {
+  // A browser with JavaScript on never shows <noscript> content, so headings, links and images
+  // inside it are not part of the page being audited (they were being counted as duplicates).
+  html = html.replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ');
   const result: CrawlPageData = {
     url,
     loadTimeMs,
