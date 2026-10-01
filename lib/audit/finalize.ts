@@ -4,6 +4,7 @@ import { computeScores } from './scoring';
 import { contradiction } from './contradiction';
 import { classifyBots } from './botVerdict';
 import { navButtonsMatter } from './scoring';
+import { reconcileScoreMentions } from './summaryScores';
 
 export { contradiction };
 
@@ -435,6 +436,7 @@ export function finalizeReport(input: DeepSeekSeoReport, crawl: CrawlResult): De
   report.score = score;
   report.scoreMethod = 'measured';
   report.scoreBreakdown = breakdown;
+  report.executiveSummary = reconcileScoreMentions(report.executiveSummary, score);
   if (report.aeoAssessment) report.aeoAssessment.generativeFriendlinessScore = score.aeoGeo;
   report.qa = { removed, added, demoted };
 

@@ -177,7 +177,9 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   }
 
   // Statements about what the retired "not a defect" padding says of itself.
-  if (/\b(?:this is )?not (?:really )?(?:a|an) (?:defect|problem|issue)\b|no action (?:is )?(?:needed|required)|nothing to fix/.test(text)) {
+  // Also "no change is required", "already correct" and "keep it tidy": a fix that says the thing is
+  // fine is a confirmation, not a recommendation.
+  if (/\b(?:this is )?not (?:really )?(?:a|an) (?:defect|problem|issue)\b|no (?:action|change|changes|fix|update)s? (?:is |are )?(?:needed|required|necessary)|nothing to (?:fix|change)|(?:is|are) already (?:correct|in place|configured correctly|valid)|simply confirm|just confirm/.test(text)) {
     return 'the suggestion itself says there is nothing to fix';
   }
 
@@ -268,6 +270,13 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   }
 
   // Files and tags that exist.
+  // FAQ answers "in plain HTML": when FAQPage markup exists, the FAQ is visible, and the raw
+  // (no-JavaScript) page carries essentially all the rendered words, the answers are already there.
+  if (/\bfaq\b|questions? and answers?|q&a/.test(text) && /plain html|raw html|directly beneath|immediately follow|accordion|server-rendered|without javascript/.test(text)
+    && signals?.sections.faq && entities.some((e) => e.type === 'FAQPage')
+    && rvr && !rvr.rawFetchUnreliable && rvr.renderedWords > 0 && rvr.rawWords >= 0.8 * rvr.renderedWords) {
+    return 'the FAQ is visible and its text is already in the raw HTML that crawlers receive without JavaScript';
+  }
   if (crawl.llmsTxtFound && /llms\.txt/.test(text) && asks(text, 'llms.txt') && !/(link|attribution|licen[cs]e|usage|terms|cite|citation|contents?|policy)/.test(text)) {
     return 'llms.txt exists (the check found it)';
   }

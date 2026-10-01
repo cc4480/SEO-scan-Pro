@@ -229,3 +229,23 @@ All tests are in tests/unit/truth.test.ts (describe names in brackets). Verified
 - Fix: DOMContentLoaded also marks the page as loaded.
 - Test: none (needs a slow live site); verified live on 18-nike.
 - Verified on re-run: see run-2 summary.
+
+## R7-01 Summary quotes scores that differ from the headline score   [status: fixed]
+- Seen on: 31-secscan-info (user report: header 98/100, summary "overall 88, technical 92, content 86")
+- Root cause: the model writes the summary before scores are computed; nothing reconciled them.
+- Fix: lib/audit/summaryScores.ts rewrites any quoted overall/technical/content/AEO/performance score to the computed one (measurements such as "883 words" or "719 ms" are left alone); called in finalize after computeScores.
+- Test: tests/unit/summaryScores.test.ts "summary scores match the computed scores"
+
+## R7-02 "Confirmation" fixes presented as recommendations   [status: fixed]
+- Seen on: 31-secscan-info (fix 8 "check sitemap and llms.txt content types ... no change is required")
+- Fix: contradiction.ts drops a fix whose own text says no change/action is needed, is already correct, or only asks to confirm; the model prompt forbids "keep X aligned / consider keeping tidy / confirm" items.
+- Test: tests/unit/summaryScores.test.ts "fixes that confirm something is fine are not findings"
+
+## R7-03 "Deliberate policy / owner's decision" asserted without evidence   [status: fixed]
+- Seen on: 31-secscan-info (AI crawlers disallowed by a Cloudflare default the owner did not choose)
+- Fix: the prompt now says robots.txt states the rule, never that the owner chose it, and adds one clause that CDN or host defaults can add such rules and can be removed.
+- Test: prompt wording only (model-side); the deterministic parts are covered by existing policy tests.
+
+## R7-04 Claims of a missing definition / relationship / FAQ mirror   [status: partly fixed]
+- Seen on: user report for secscan.info (fixes 1, 4, 7)
+- Status: not reproduced on today's scan (opening text and FAQ checks from the A-07 and A-05 fixes held; 0 criticals); the prompt now requires checking openingText and headings first. No new deterministic check was added because the model-side claim varies run to run.

@@ -88,7 +88,7 @@ export function contentSignals(renderedHtml: string, visibleText: string, hrefla
       pricing: pricedInContext || has(/\b(pricing|plans?|purchase|buy credits|credits)\b/),
       faq: has(/\b(faq|frequently asked|common questions)\b|^(?:questions(?: (?:and|&) answers)?|q ?&(?:amp;)? ?a)$/),
       // Headings and navigation labels both count: a "How it works" nav link points at that section.
-      howItWorks: has(/\bhow (it|this|[a-z]+) works?\b|\bgetting started\b/),
+      howItWorks: has(/\bhow (it|this|[a-z]+(?: [a-z]+)?) works?\b|\bgetting started\b/),
       features: has(/\b(features|what we (test|check|cover|scan)|capabilities|pillars|benefits|what you get|checks)\b/, heads),
       about: has(/\babout( us)?\b|\bour (story|team|mission)\b/),
       contact: has(/\bcontact( us)?\b|\bget in touch\b/),
