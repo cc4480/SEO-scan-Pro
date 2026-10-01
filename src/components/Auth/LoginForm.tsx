@@ -52,7 +52,7 @@ export default function LoginForm({ onLoginSuccess, onSwitchToRegister, onSwitch
             <BrandMark size={72} />
           </div>
           <h1 className="text-3xl tracking-tight"><BrandWordmark /></h1>
-          <p className="text-slate-400 text-sm mt-2">Enterprise SEO Audit Platform</p>
+          <p className="text-slate-400 text-sm mt-2">SEO and AI-search audits in one scan</p>
         </div>
 
         {/* Form Card */}
