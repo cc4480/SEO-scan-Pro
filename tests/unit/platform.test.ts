@@ -235,7 +235,7 @@ describe('crawler: new checks', () => {
         },
         'https://x.test'
       )
-    ).toEqual({ https: true, hsts: true, csp: true, xFrameOptions: true, xContentTypeOptions: true, referrerPolicy: true });
+    ).toEqual({ https: true, hsts: true, csp: true, cspReportOnly: false, xFrameOptions: true, xContentTypeOptions: true, referrerPolicy: true });
   });
 
   it('finds titles shared by several real pages and ignores simulated ones', () => {
