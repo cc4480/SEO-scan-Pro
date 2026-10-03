@@ -249,3 +249,17 @@ All tests are in tests/unit/truth.test.ts (describe names in brackets). Verified
 ## R7-04 Claims of a missing definition / relationship / FAQ mirror   [status: partly fixed]
 - Seen on: user report for secscan.info (fixes 1, 4, 7)
 - Status: not reproduced on today's scan (opening text and FAQ checks from the A-07 and A-05 fixes held; 0 criticals); the prompt now requires checking openingText and headings first. No new deterministic check was added because the model-side claim varies run to run.
+
+## R8-01 Fact-check removed valid advice (over-removal)   [status: fixed]
+- Seen on: code review of lib/audit/contradiction.ts, reproduced with 8 hand-written valid fixes (5 were dropped)
+- Symptom: "Rewrite the H1 / add your keyword to the H1", "title and H1 do not match", "set viewport to include initial-scale=1", "add canonical tags to blog templates" were removed as "the page already has X"; "Add Y. No changes are required to Z" was removed as "nothing to fix".
+- Root cause: the presence rules (h1, viewport, canonical, meta description) matched an ask verb up to 40 characters before the term, so any sentence that mentions the element after "add"/"no"/"set" counted as a request for it to exist. The "nothing to fix" rule matched anywhere in title + description + remediation.
+- Fix: presence rules now need the term directly after the verb (`asksToCreate`), and are skipped when the text is about changing the element (`MODIFIES`: keyword, mismatch, initial-scale, points to, ...) or about other pages/templates (`ELSEWHERE`). The "nothing to fix" rule drops a fix only when, with the no-action phrase removed, no action verb is left.
+- Test: tests/unit/truth.test.ts "fact-check keeps valid advice (over-removal guard)" (both directions: valid advice kept, real "already present" and pure confirmations still removed)
+
+## R8-02 Policy-only crawler refusal deleted the model's crawler advice with a false reason   [status: fixed]
+- Seen on: code review of lib/audit/finalize.ts, reproduced
+- Symptom: when the only refusal was policy (robots.txt disallows the crawler), a valid fix such as "add explicit user-agent rules for OAI-SearchBot" was removed as "replaced by a measured finding on the same topic" although no measured finding was written.
+- Root cause: `botsMeasured` was true whenever any result had `blocked`, including policy and inconclusive ones.
+- Fix: `botsMeasured` is true only when a measured crawler finding was actually added (confirm / let through / decide). Separately, and explicitly, a model fix that names a policy-refused crawler and advises letting it through is removed with the accurate reason (the refusal matches robots.txt's own Disallow rules).
+- Test: tests/unit/truth.test.ts "crawler advice is only replaced by a finding that exists"; existing A-15 test still passes.

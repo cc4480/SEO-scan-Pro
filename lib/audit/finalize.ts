@@ -260,11 +260,19 @@ export function finalizeReport(input: DeepSeekSeoReport, crawl: CrawlResult): De
   }
 
   // Replace the model's own take on a topic we measured, so there is one accurate finding, not two.
-  const botsMeasured = !!bots && bots.results.some((r) => r.blocked);
+  // Only when a measured crawler finding was actually written. A refusal that is policy (robots.txt
+  // disallows it) produces no finding, so the model's crawler advice is not "replaced" by anything.
+  const botsMeasured = newFixes.some((n) => /^(?:Confirm whether search crawlers|Let search and assistant crawlers|Decide, and state)/.test(n.title));
   const jsMeasured = newFixes.some((n) => n.title.startsWith('Put the main content'));
   const navMeasured = newFixes.some((n) => n.title.startsWith('Use real links'));
+  // Advice to let through a crawler that robots.txt itself disallows contradicts the site's stated policy.
+  const policyNames = bots ? classifyBots(bots).policy.map((r) => r.name.toLowerCase()) : [];
   report.recommendedFixes = report.recommendedFixes.filter((f) => {
     const txt = textOf(f);
+    if (policyNames.some((n) => txt.includes(n)) && /block|refus|den(?:y|ied)|forbidden|403|unblock|through|allow/.test(txt)) {
+      removed.push({ title: f.title, reason: 'the refusal matches robots.txt\'s own Disallow rules (site policy), so it is not a defect to fix' });
+      return false;
+    }
     const dup =
       (botsMeasured && topicOf.bots.test(txt)) ||
       (jsMeasured && topicOf.jsGap.test(txt) && /(content|render|raw|html)/.test(txt)) ||

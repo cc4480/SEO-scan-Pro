@@ -38,6 +38,24 @@ function asks(text: string, term: string): boolean {
   return new RegExp(`\\b${ASK}\\b[^.;]{0,40}\\b${t}\\b`, 'i').test(text) || new RegExp(`\\b${t}\\b[^.;]{0,30}\\b(?:is|are)\\s+(?:missing|absent|not (?:present|set|declared))`, 'i').test(text);
 }
 
+/**
+ * The text asks for a single tag/element to EXIST ("add an H1", "missing viewport tag"): the term
+ * must follow the verb directly. Looser matching ("add your keyword to the H1", "no overlap between
+ * the title and h1") describes changing or judging an element that is already there.
+ */
+function asksToCreate(text: string, term: string): boolean {
+  const t = esc(term);
+  const mod = '(?:(?:main|primary|visible|valid|proper|clear|single|meta|html)\\s+){0,2}';
+  return new RegExp(`\\b${ASK}\\s+(?:an?\\s+|the\\s+|your\\s+)?${mod}${t}\\b`, 'i').test(text)
+    || new RegExp(`\\b${t}\\b[^.;]{0,30}\\b(?:is|are)\\s+(?:missing|absent|not (?:present|set|declared))`, 'i').test(text);
+}
+
+/** The element is wanted on OTHER pages or templates, so its presence on the audited page is irrelevant. */
+const ELSEWHERE = /paginat|templates?\b|\bblog\b|categor(?:y|ies)|archives?\b|product pages?|other pages|subpages?|inner pages|additional pages|each page|every page|all pages|across (?:the )?(?:site|pages)|landing pages|article pages/;
+
+/** Words that mean "change/improve what is there", not "add what is missing". */
+const MODIFIES = /keyword|generic|vague|rewrite|reword|improve|descriptive|specific|clearer|weak|overlap|mismatch|match\b|too (?:short|long|generic)|length|unique|duplicate|stuff|optimi[sz]|initial-scale|maximum-scale|user-scalable|zoom|width=|remove|replace|correct|incorrect|wrong|self-referenc|point(?:s|ing)? to|http:|trailing slash|query/;
+
 /** Reason the recommendation contradicts the evidence, or null when it stands. `text` is lowercased title + description + remediation. */
 export function contradiction(text: string, crawl: CrawlResult): string | null {
   const page = crawl.mainPage;
@@ -179,8 +197,13 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   // Statements about what the retired "not a defect" padding says of itself.
   // Also "no change is required", "already correct" and "keep it tidy": a fix that says the thing is
   // fine is a confirmation, not a recommendation.
-  if (/\b(?:this is )?not (?:really )?(?:a|an) (?:defect|problem|issue)\b|no (?:action|change|changes|fix|update)s? (?:is |are )?(?:needed|required|necessary)|nothing to (?:fix|change)|(?:is|are) already (?:correct|in place|configured correctly|valid)|simply confirm|just confirm/.test(text)) {
-    return 'the suggestion itself says there is nothing to fix';
+  const NO_ACTION = /\b(?:this is )?not (?:really )?(?:a|an) (?:defect|problem|issue)\b|no (?:action|change|changes|fix|update)s? (?:is |are )?(?:needed|required|necessary)|nothing to (?:fix|change)|(?:is|are) already (?:correct|in place|configured correctly|valid)|simply confirm|just confirm/g;
+  if (NO_ACTION.test(text)) {
+    // A fix that asks for something AND says some other part needs no change is still a fix.
+    const rest = text.replace(NO_ACTION, ' ');
+    if (!/\b(?:add|create|include|implement|publish|set|replace|remove|update|fix|rewrite|change|enable|configure|serve|move|reduce|compress|declare|use|ensure|make|put|switch|install|link|redirect)\b/.test(rest)) {
+      return 'the suggestion itself says there is nothing to fix';
+    }
   }
 
   // hreflang on a single-language site.
@@ -283,12 +306,13 @@ export function contradiction(text: string, crawl: CrawlResult): string | null {
   if (crawl.sitemapFound && /sitemap/.test(text) && asks(text, 'sitemap') && !/(update|lastmod|submit|index|reference|robots)/.test(text)) {
     return 'a sitemap exists (the check found it)';
   }
-  if (page.meta.description && asks(text, 'meta description') && !/(too (short|long)|length|unique|improve|rewrite|duplicate)/.test(text)) {
-    return 'the page already has a meta description';
-  }
-  if (page.meta.canonical && asks(text, 'canonical') && !/(wrong|incorrect|mismatch|self-referenc|point)/.test(text)) return 'the page already declares a canonical URL';
-  if (page.meta.viewport && asks(text, 'viewport')) return 'the page already has a viewport tag';
-  if (page.headings.h1.length > 0 && asks(text, 'h1') && !/(multiple|more than one|several)/.test(text)) return 'the page already has an H1';
+  // Presence rules: only when the text asks for the element to exist, and is not about changing it
+  // or about other pages/templates.
+  const presenceOnly = (term: string) => asksToCreate(text, term) && !MODIFIES.test(text) && !ELSEWHERE.test(text);
+  if (page.meta.description && presenceOnly('description')) return 'the page already has a meta description';
+  if (page.meta.canonical && presenceOnly('canonical')) return 'the page already declares a canonical URL';
+  if (page.meta.viewport && presenceOnly('viewport')) return 'the page already has a viewport tag';
+  if (page.headings.h1.length > 0 && presenceOnly('h1') && !/(multiple|more than one|several)/.test(text)) return 'the page already has an H1';
 
   return null;
 }

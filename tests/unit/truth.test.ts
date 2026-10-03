@@ -481,3 +481,68 @@ describe('F-MEASURE fields consumed', () => {
     expect(computeScores(html).breakdown.performance.map((d) => d.reason).join(' ')).toMatch(/HTML document is 2000 KB/);
   });
 });
+
+describe('fact-check keeps valid advice (over-removal guard)', () => {
+  const c = crawl();
+  const verdict = (t: string) => contradiction(t.toLowerCase(), c);
+
+  it('keeps advice that improves an element that exists', () => {
+    expect(verdict('Rewrite the H1: add your primary keyword to the H1. "Welcome" tells searchers nothing.')).toBeNull();
+    expect(verdict('Title and H1 do not match: there is no overlap between the title and h1.')).toBeNull();
+    expect(verdict('Set viewport to include initial-scale=1 and remove maximum-scale=1, which blocks pinch zoom.')).toBeNull();
+    expect(verdict('Add a call to action and your primary keyword to the meta description so it earns clicks.')).toBeNull();
+    expect(verdict('The canonical points to the http version: set canonical to the https URL.')).toBeNull();
+  });
+
+  it('keeps advice about other pages or templates', () => {
+    expect(verdict('Add canonical tags to the blog templates and paginated URLs.')).toBeNull();
+    expect(verdict('Add an H1 to each product page.')).toBeNull();
+    expect(verdict('Add a meta description to category pages.')).toBeNull();
+  });
+
+  it('still removes a request for an element the page already has', () => {
+    expect(verdict('Add an H1 heading to the page.')).toMatch(/already has an H1/);
+    expect(verdict('Missing viewport meta tag: add a viewport tag.')).toMatch(/viewport/);
+    expect(verdict('Add a canonical tag to the page.')).toMatch(/canonical/);
+    expect(verdict('Add a meta description to the page.')).toMatch(/meta description/);
+  });
+
+  it('keeps a fix that asks for something and says another part needs no change', () => {
+    expect(verdict('Add a canonical tag to paginated URLs. No changes are required to the home page.')).toBeNull();
+    expect(verdict('Add Product schema to the pricing page. The existing Organization markup is already correct.')).toBeNull();
+  });
+
+  it('still removes a fix that only confirms things are fine', () => {
+    expect(verdict('Check sitemap content types. Both are served correctly. No change is required.')).toMatch(/nothing to fix/);
+    expect(verdict('Confirm the robots rules. This is not a problem, simply confirm they are intended.')).toMatch(/nothing to fix/);
+  });
+});
+
+describe('crawler advice is only replaced by a finding that exists', () => {
+  const modelFix = { title: 'Add explicit user-agent rules for OAI-SearchBot and ClaudeBot', category: 'aeo-geo' as const, priority: 'medium' as const, description: 'robots.txt has no user-agent group for search assistants, so the wildcard rules apply.', remediation: 'Add User-agent: OAI-SearchBot with Allow: / so the intent is explicit.' };
+  const run = (c: CrawlResult) => finalizeReport(draft({ criticalIssues: [], recommendedFixes: [modelFix] }), c);
+  const titles = (o: DeepSeekSeoReport) => o.recommendedFixes.map((f) => f.title);
+
+  it('keeps the model fix when the only refusal is policy (robots.txt disallows it)', () => {
+    const out = run(withBots([bot('GPTBot', 'training', { status: 403, blocked: true, robotsAllows: false })]));
+    expect(titles(out)).toContain(modelFix.title);
+    expect(out.qa?.removed.some((r) => r.title === modelFix.title)).toBe(false);
+  });
+
+  it('keeps the model fix when nothing was refused', () => {
+    expect(titles(run(withBots([bot('GPTBot', 'training')])))).toContain(modelFix.title);
+  });
+
+  it('still replaces the model fix with the measured one for a genuine block', () => {
+    const out = run(withBots([bot('OAI-SearchBot', 'search', { status: 403, blocked: true, robotsAllows: true })]));
+    expect(titles(out)).not.toContain(modelFix.title);
+    expect(titles(out).join(' ')).toMatch(/Let search and assistant crawlers/);
+    expect(out.qa?.removed.find((r) => r.title === modelFix.title)?.reason).toMatch(/replaced by a measured finding/);
+  });
+
+  it('replaces it for an inconclusive refusal too (the measured "confirm" finding covers the topic)', () => {
+    const out = run(withBots([bot('Googlebot', 'search', { status: 403, blocked: true, inconclusive: true })]));
+    expect(titles(out)).not.toContain(modelFix.title);
+    expect(titles(out).join(' ')).toMatch(/Confirm whether search crawlers/);
+  });
+});
