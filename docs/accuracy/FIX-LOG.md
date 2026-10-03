@@ -272,3 +272,9 @@ All tests are in tests/unit/truth.test.ts (describe names in brackets). Verified
 
 ## R8-04 `npm test` failed on a fresh checkout, and nothing ran the tests   [status: fixed]
 - Fix: tests/setup.ts falls back to a throwaway JWT_SECRET when .env.test is absent, so unit tests need no setup. `.env.test.example` documents the DATABASE_URL integration tests need. `npm run test:unit` added. `.github/workflows/ci.yml` runs typecheck + unit tests, and integration tests against a PostgreSQL service. The workflow has not been run yet (it only exists on this branch).
+
+## R8-05 Same finding listed twice after a critical was demoted   [status: fixed]
+- Seen on: local smoke scan (offline generator): "Repair Alt Attributes for Images" + "Found 1 images missing alt-text descriptions"; "Create and reference Sitemap.xml" + "No sitemap was found"
+- Root cause: finalize.ts only added a demoted critical as a fix when no existing fix shared 60% of its significant words (and at least three); short items never matched.
+- Fix: `sameTopic` (alt text, sitemap, security headers, broken links, Open Graph, canonical, meta description, llms.txt, hreflang, structured data). A demoted critical is added as a fix only when no existing fix overlaps by words OR covers the same topic. The demotion is still recorded in qa.demoted.
+- Test: tests/unit/truth.test.ts "demoted criticals do not duplicate a fix that covers the same topic"

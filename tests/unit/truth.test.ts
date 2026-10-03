@@ -546,3 +546,27 @@ describe('crawler advice is only replaced by a finding that exists', () => {
     expect(titles(out).join(' ')).toMatch(/Confirm whether search crawlers/);
   });
 });
+
+describe('demoted criticals do not duplicate a fix that covers the same topic', () => {
+  const fix = (title: string) => ({ title, category: 'content' as const, priority: 'medium' as const, description: 'd', remediation: 'r' });
+  const c = crawl({ sitemapFound: false }, { images: { total: 3, missingAlt: 1, noAltAttribute: 1, emptyAlt: 1, list: [] } });
+
+  it('adds no second finding for the same topic, with few shared words', () => {
+    const out = finalizeReport(draft({
+      criticalIssues: ['Found 1 images missing alt-text descriptions', 'No sitemap was found'],
+      recommendedFixes: [fix('Repair Alt Attributes for Images'), fix('Create and reference Sitemap.xml')]
+    }), c);
+    const titles = out.recommendedFixes.map((f) => f.title);
+    expect(titles.filter((t) => /alt/i.test(t))).toHaveLength(1);
+    expect(titles.filter((t) => /sitemap/i.test(t))).toHaveLength(1);
+    expect(out.qa?.demoted?.length).toBe(2);
+  });
+
+  it('still turns a critical on an uncovered topic into a fix', () => {
+    const out = finalizeReport(draft({
+      criticalIssues: ['Open Graph tags are incomplete for link previews'],
+      recommendedFixes: [fix('Repair Alt Attributes for Images')]
+    }), c);
+    expect(out.recommendedFixes.some((f) => /open graph/i.test(f.title))).toBe(true);
+  });
+});

@@ -36,6 +36,24 @@ const topicOf = {
 // Two pieces of text are "about the same thing" when most of the shorter one's significant words
 // appear in the other (needs at least three, so a short phrase cannot match everything).
 const sig = (s: string) => new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3));
+// Findings that are about the same measured topic even when they share few words ("Found 1 images
+// missing alt-text descriptions" vs "Repair Alt Attributes for Images").
+const TOPICS: RegExp[] = [
+  /\balt\b|alt[- ]?(?:text|attributes?)/,
+  /sitemap/,
+  /security headers?|\bhsts\b|strict-transport|content-security-policy|x-frame-options|x-content-type|referrer-policy/,
+  /broken links?|dead links?/,
+  /open graph|\bog:|twitter cards?/,
+  /\bcanonical\b/,
+  /meta description/,
+  /llms\.txt/,
+  /\bhreflang\b/,
+  /structured data|json-?ld|schema markup/
+];
+const sameTopic = (a: string, b: string) => {
+  const x = a.toLowerCase(), y = b.toLowerCase();
+  return TOPICS.some((t) => t.test(x) && t.test(y));
+};
 const overlaps = (a: string, b: string) => {
   const x = sig(a), y = sig(b);
   if (x.size < 3 || y.size < 3) return false;
@@ -387,7 +405,7 @@ export function finalizeReport(input: DeepSeekSeoReport, crawl: CrawlResult): De
   report.criticalIssues = report.criticalIssues.filter((issue) => {
     if (severe(issue)) return true;
     demoted.push({ title: issue, reason: 'not one of the measured severe conditions (robots blocks all, noindex, HTTPS missing, genuinely blocked search crawlers, severe JavaScript gap, no title, no H1); moved to recommended fixes' });
-    if (!report.recommendedFixes.some((f) => overlaps(issue, `${f.title} ${f.description}`))) {
+    if (!report.recommendedFixes.some((f) => overlaps(issue, `${f.title} ${f.description}`) || sameTopic(issue, `${f.title} ${f.description}`))) {
       const low = issue.toLowerCase();
       report.recommendedFixes.push({
         title: issue.length > 90 ? `${issue.slice(0, 87)}...` : issue.replace(/\.$/, ''),
