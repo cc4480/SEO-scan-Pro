@@ -45,8 +45,11 @@ function measurements(r: any, g: any): Row[] {
   add('H1 count', p.headings.h1.length, t.h1.length, p.headings.h1.length === t.h1.length);
   add('H2 count', p.headings.h2.length, t.h2Count, within(p.headings.h2.length, t.h2Count, 0.1, 2));
   add('images (with src)', p.images.total, t.imagesWithSrc, within(p.images.total, t.imagesWithSrc, 0.15, 3), `DOM has ${t.imagesTotal} <img>, ${t.imagesWithSrc} with a source`);
-  const truthMissing = t.imagesNoAltAttr + t.imagesEmptyAlt;
-  add('images missing/empty alt', p.images.missingAlt, truthMissing, within(p.images.missingAlt, truthMissing, 0.2, 3), `no alt attr ${t.imagesNoAltAttr}, empty alt ${t.imagesEmptyAlt}`);
+  // The scanner scores only images with NO alt attribute (alt="" marks a decorative image and is
+  // valid), so compare each category with its own ground-truth number, not the sum.
+  const scannerNoAlt = p.images.noAltAttribute ?? p.images.missingAlt;
+  add('images with no alt attribute', scannerNoAlt, t.imagesNoAltAttr, within(scannerNoAlt, t.imagesNoAltAttr, 0.2, 3));
+  if (p.images.emptyAlt !== undefined) add('images with alt="" (decorative)', p.images.emptyAlt, t.imagesEmptyAlt, within(p.images.emptyAlt, t.imagesEmptyAlt, 0.2, 3));
   add('links (scanner total vs real+hash anchors)', p.links.total, `${t.anchors}+${t.hashAnchors} hash`, within(p.links.total, t.anchors, 0.2, 5) || within(p.links.total, t.anchors + t.hashAnchors, 0.2, 5));
   const types = [...(p.structuredData.types || [])].sort();
   const tTypes = [...t.jsonLdTypes].sort();

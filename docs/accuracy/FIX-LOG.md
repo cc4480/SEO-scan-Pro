@@ -263,3 +263,12 @@ All tests are in tests/unit/truth.test.ts (describe names in brackets). Verified
 - Root cause: `botsMeasured` was true whenever any result had `blocked`, including policy and inconclusive ones.
 - Fix: `botsMeasured` is true only when a measured crawler finding was actually added (confirm / let through / decide). Separately, and explicitly, a model fix that names a policy-refused crawler and advises letting it through is removed with the accurate reason (the refusal matches robots.txt's own Disallow rules).
 - Test: tests/unit/truth.test.ts "crawler advice is only replaced by a finding that exists"; existing A-15 test still passes.
+
+## R8-03 Review tool compared the wrong alt-text numbers   [status: fixed]
+- Seen on: 14 of 30 sites in run 2 ("images missing/empty alt" MISMATCH, e.g. react.dev scanner 0 vs truth 24)
+- Root cause: scripts/audit-corpus/review.ts compared the scanner's `missingAlt` (images with NO alt attribute, by design: alt="" is valid) with ground truth `noAlt + emptyAlt`. A tool defect, not a scanner one; it inflated the mismatch count in runs/2026-09-30-run2/SUMMARY.md.
+- Fix: the sheet now compares "images with no alt attribute" and "images with alt=\"\" (decorative)" each with its own ground-truth number.
+- Test: none (measurement tool). The run-2 sheets and SUMMARY.md were generated with the old comparison and are NOT regenerated here; the next corpus run will give the corrected count.
+
+## R8-04 `npm test` failed on a fresh checkout, and nothing ran the tests   [status: fixed]
+- Fix: tests/setup.ts falls back to a throwaway JWT_SECRET when .env.test is absent, so unit tests need no setup. `.env.test.example` documents the DATABASE_URL integration tests need. `npm run test:unit` added. `.github/workflows/ci.yml` runs typecheck + unit tests, and integration tests against a PostgreSQL service. The workflow has not been run yet (it only exists on this branch).

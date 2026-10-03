@@ -13,6 +13,7 @@
     "lint": "tsc --noEmit",
     "stripe:setup": "tsx scripts/stripe-setup.ts",
     "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
     "test:watch": "vitest"
   },
   "dependencies": {
